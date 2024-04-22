@@ -1,0 +1,17 @@
+{
+  "name": "grapro-24-final-project",
+  "version-string": "0.1",
+  "dependencies": [
+    "glfw3",
+    "glad",
+    "glm",
+    "stb",
+    "assimp",
+    {
+      "name": "imgui",
+      "features": [
+        "glfw-binding", "opengl3-binding"
+      ]
+    }
+  ]
+}
