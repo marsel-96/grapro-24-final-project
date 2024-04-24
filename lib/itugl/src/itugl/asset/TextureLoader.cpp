@@ -1,6 +1,5 @@
 #include <itugl/asset/TextureLoader.h>
 
-#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 std::span<const std::byte> TextureLoaderUtils::LoadTexture2DData(const char* path, int& width, int& height, Data::Type& dataType, TextureObject::Format format, TextureObject::InternalFormat internalFormat, bool flipVertical)
