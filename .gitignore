@@ -16,3 +16,5 @@ CTestTestfile.cmake
 /_cmake-*/
 /_tools/
 /vcpkg/
+
+_settings/

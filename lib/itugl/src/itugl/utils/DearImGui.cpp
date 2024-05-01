@@ -21,9 +21,13 @@ DearImGui::~DearImGui()
 
 void DearImGui::Initialize(::Window& window)
 {
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = "settings/imgui.ini";
+
     // Setup Platform/Renderer bindings
     ImGui_ImplGlfw_InitForOpenGL(window.GetInternalWindow(), true);
     ImGui_ImplOpenGL3_Init("#version 410 core");
+
 }
 
 void DearImGui::Cleanup()
