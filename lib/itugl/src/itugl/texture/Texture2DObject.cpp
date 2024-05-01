@@ -9,6 +9,7 @@ Texture2DObject::Texture2DObject()
 template <>
 void Texture2DObject::SetImage<std::byte>(GLint level, GLsizei width, GLsizei height, Format format, InternalFormat internalFormat, std::span<const std::byte> data, Data::Type type)
 {
+    m_size = glm::vec2(width, height);
     assert(IsBound());
     assert(data.empty() || type != Data::Type::None);
     assert(IsValidFormat(format, internalFormat));

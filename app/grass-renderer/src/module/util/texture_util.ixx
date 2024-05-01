@@ -6,24 +6,36 @@ module;
 
 export module app.util.texture;
 
-export std::shared_ptr<Texture2DObject> LoadTexture(const char* path)
-{
-    auto texture = std::make_shared<Texture2DObject>();
+export struct Texture2DMetadata {
+    int width;
+    int height;
+    int components;
+};
 
-    int width = 0;
-    int height = 0;
-    int components = 0;
+export Texture2DObject LoadTexture(const char* path, Texture2DMetadata& texture_metadata)
+{
+    Texture2DObject texture;
 
     // Load the texture data here
-    unsigned char* data = stbi_load(path, &width, &height, &components, 4);
+    unsigned char* data = stbi_load(
+        path,
+        &texture_metadata.width,
+        &texture_metadata.height,
+        &texture_metadata.components,
+        4
+    );
 
     assert(data != nullptr);
 
-    texture->Bind();
-    texture->SetImage(0, width, height, TextureObject::FormatRGBA, TextureObject::InternalFormatRGBA, std::span<const unsigned char>(data, width * height * 4));
-
-    // Generate mipmaps
-    texture->GenerateMipmap();
+    texture.Bind();
+    texture.SetImage(
+        0,
+        texture_metadata.width,
+        texture_metadata.height,
+        TextureObject::FormatRGBA,
+        TextureObject::InternalFormatRGBA,
+        std::span<const unsigned char>(data, texture_metadata.width * texture_metadata.height * 4)
+    );
 
     // Release texture data
     stbi_image_free(data);
@@ -31,9 +43,9 @@ export std::shared_ptr<Texture2DObject> LoadTexture(const char* path)
     return texture;
 }
 
-export std::shared_ptr<Texture2DObject> CreateDefaultTexture()
+export Texture2DObject CreateDefaultTexture()
 {
-    auto texture = std::make_shared<Texture2DObject>();
+    Texture2DObject texture;
 
     constexpr auto width = 4;
     constexpr auto height = 4;
@@ -50,9 +62,9 @@ export std::shared_ptr<Texture2DObject> CreateDefaultTexture()
         }
     }
 
-    texture->Bind();
-    texture->SetImage<float>(0, width, height, TextureObject::FormatRGBA, TextureObject::InternalFormatRGBA, pixels);
-    texture->GenerateMipmap();
+    texture.Bind();
+    texture.SetImage<float>(0, width, height, TextureObject::FormatRGBA, TextureObject::InternalFormatRGBA, pixels);
+    texture.GenerateMipmap();
 
     return texture;
 }

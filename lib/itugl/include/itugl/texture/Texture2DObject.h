@@ -6,6 +6,8 @@
 // Texture object in 2 dimensions
 class Texture2DObject : public TextureObjectBase<TextureObject::Texture2D>
 {
+    glm::vec2 m_size;
+
 public:
     Texture2DObject();
 
@@ -20,6 +22,8 @@ public:
         GLsizei width, GLsizei height,
         Format format, InternalFormat internalFormat,
         std::span<const T> data, Data::Type type = Data::Type::None);
+
+    [[nodiscard]] glm::vec2 GetSize() const { return m_size; }
 };
 
 // Set image with data in bytes

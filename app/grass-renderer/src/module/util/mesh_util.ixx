@@ -19,7 +19,7 @@ struct TerrainMeshVertex {
     glm::vec2 texCoord;
 };
 
-export void CreateTerrainMesh(Mesh &mesh, const unsigned int gridX, const unsigned int gridY) {
+export void CreateTerrainMesh(Mesh &mesh, const unsigned int gridX, const unsigned int gridY, const float scale) {
     // Define the vertex format (should match the vertex structure)
     VertexFormat vertexFormat;
 
@@ -31,7 +31,7 @@ export void CreateTerrainMesh(Mesh &mesh, const unsigned int gridX, const unsign
     std::vector<unsigned int> indices;
 
     // Grid scale to convert the entire grid to size 1x1
-    const glm::vec2 scale(1.0f / static_cast<float>(gridX - 1), 1.0f / static_cast<float>(gridY - 1));
+    //const glm::vec2 scale(1.0f / static_cast<float>(gridX - 1), 1.0f / static_cast<float>(gridY - 1));
 
     // Number of columns and rows
     const unsigned int columnCount = gridX;
@@ -41,9 +41,19 @@ export void CreateTerrainMesh(Mesh &mesh, const unsigned int gridX, const unsign
     for (unsigned int j = 0; j < rowCount; ++j) {
         for (unsigned int i = 0; i < columnCount; ++i) {
             // Vertex data for this vertex only
-            glm::vec3 position(static_cast<float>(i) * scale.x, 0.0f, static_cast<float>(j) * scale.y);
+
+            // Vertex data for this vertex only
+            glm::vec3 position(
+                (static_cast<float>(i) - static_cast<float>(columnCount) / 2.0f) * scale,
+                  0.0,
+                  (static_cast<float>(j) - static_cast<float>(rowCount) / 2.0f) * scale
+            );
+
             glm::vec3 normal(0.0f, 1.0f, 0.0f);
-            glm::vec2 texCoord(i, j);
+            glm::vec2 texCoord(
+                static_cast<float>(i) / static_cast<float>(columnCount),
+                static_cast<float>(j) / static_cast<float>(rowCount)
+            );
 
             vertices.emplace_back(position, normal, texCoord);
 
