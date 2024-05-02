@@ -11,6 +11,7 @@ module;
 export module app;
 
 import terrain.heightmap_cpu;
+import terrain.heightmap_gpu;
 
 import app.camera;
 import app.ui;
@@ -21,6 +22,7 @@ export class GrassRenderer final : public Application {
     UIManager m_ui;
 
     TerrainHeightmapCPU m_terrainHeightmapCPU;
+    TerrainHeightmapGPU m_terrainHeightmapGPU;
 
 protected:
 
@@ -30,10 +32,12 @@ protected:
 
         m_ui.Initialize(window);
         m_camera.Initialize(window);
+
         m_terrainHeightmapCPU.Initialize();
+        m_terrainHeightmapGPU.Initialize();
 
         GetDevice().EnableFeature(GL_DEPTH_TEST); // Enable depth test
-        //GetDevice().SetWireframeEnabled(true); // Enable wireframe
+        GetDevice().SetWireframeEnabled(true); // Enable wireframe
     }
 
     void Update() override {
@@ -56,8 +60,8 @@ protected:
 
         // Terrain patches
         DrawObject(
-            m_terrainHeightmapCPU.GetMesh(),
-            m_terrainHeightmapCPU.GetMaterial(),
+            m_terrainHeightmapGPU.GetMesh(),
+            m_terrainHeightmapGPU.GetMaterial(),
             scale(glm::vec3(1.0f))
         );
 
@@ -90,7 +94,7 @@ public:
                      m_camera(
                          20.0f,
                          0.5f,
-                         glm::vec3(0.0f, 15.0f, 15.0f),
+                         glm::vec3(10.0f, 20.0f, 10.0f),
                          glm::vec3(0.0f, 0.0f, 0.0f)
                      ) {
     }

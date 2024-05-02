@@ -41,7 +41,7 @@ public:
 
         // Set perspective matrix
         const auto aspectRatio = window.GetAspectRatio();
-        m_camera.SetPerspectiveProjectionMatrix(1.0f, aspectRatio, 0.1f, 1000.0f);
+        m_camera.SetPerspectiveProjectionMatrix(1.0f, aspectRatio, 0.1f, 3000.0f);
     }
 
     void UpdateCamera(const Window& window, const float deltaTime) {
@@ -85,7 +85,7 @@ public:
 
             // Double speed if SHIFT is pressed
             if (window.IsKeyPressed(GLFW_KEY_LEFT_SHIFT))
-                inputTranslation *= 2.0f;
+                inputTranslation *= 4.0f;
 
             m_cameraPosition += inputTranslation.x * viewRight + inputTranslation.y * viewForward;
         }
@@ -110,6 +110,10 @@ public:
 
     [[nodiscard]] glm::mat4 GetViewProjectionMatrix() const {
         return m_camera.GetViewProjectionMatrix();
+    }
+
+    [[nodiscard]] glm::mat4 GetViewMatrix() const {
+        return m_camera.GetViewMatrix();
     }
 
 };
