@@ -18,7 +18,6 @@ import app.ui;
 
 export class GrassRenderer final : public Application {
 
-    ManagedCamera m_camera;
     UIManager m_ui;
 
     TerrainHeightmapCPU m_terrainHeightmapCPU;
@@ -31,10 +30,9 @@ protected:
         auto& window = GetMainWindow();
 
         m_ui.Initialize(window);
-        m_camera.Initialize(window);
 
-        m_terrainHeightmapCPU.Initialize();
-        m_terrainHeightmapGPU.Initialize();
+        m_terrainHeightmapCPU.Initialize(window);
+        m_terrainHeightmapGPU.Initialize(window);
 
         GetDevice().EnableFeature(GL_DEPTH_TEST); // Enable depth test
         GetDevice().SetWireframeEnabled(true); // Enable wireframe
@@ -44,12 +42,11 @@ protected:
         Application::Update();
 
         const Window& window = GetMainWindow();
+        const auto deltaTime = GetDeltaTime();
+
+        m_terrainHeightmapGPU.Update(window, deltaTime);
 
         m_ui.Update();
-        m_camera.UpdateCamera(
-            window,
-            GetDeltaTime()
-        );
     }
 
     void Render() override {
@@ -58,29 +55,9 @@ protected:
         // Clear color and depth
         GetDevice().Clear(true, Color(0.0f, 0.0f, 0.0f, 1.0f), true, 1.0f);
 
-        // Terrain patches
-        DrawObject(
-            m_terrainHeightmapGPU.GetMesh(),
-            m_terrainHeightmapGPU.GetMaterial(),
-            scale(glm::vec3(1.0f))
-        );
-
+        m_terrainHeightmapGPU.Render();
 
         m_ui.Render();
-    }
-
-    void DrawObject(const Mesh& mesh, const Material& material, const glm::mat4& worldMatrix) const {
-        material.Use();
-
-        const auto& shaderProgram = *material.GetShaderProgram();
-
-        const auto locationWorldMatrix = shaderProgram.GetUniformLocation("WorldMatrix");
-        const auto locationViewProjMatrix = shaderProgram.GetUniformLocation("ViewProjMatrix");
-
-        material.GetShaderProgram()->SetUniform(locationWorldMatrix, worldMatrix);
-        material.GetShaderProgram()->SetUniform(locationViewProjMatrix, m_camera.GetViewProjectionMatrix());
-
-        mesh.DrawSubmesh(0);
     }
 
     void Cleanup() override {
@@ -90,12 +67,5 @@ protected:
     }
 
 public:
-    GrassRenderer(): Application(2560, 1440, "Grass Renderer"),
-                     m_camera(
-                         20.0f,
-                         0.5f,
-                         glm::vec3(10.0f, 20.0f, 10.0f),
-                         glm::vec3(0.0f, 0.0f, 0.0f)
-                     ) {
-    }
+    GrassRenderer(): Application(2560, 1440, "Grass Renderer") {}
 };

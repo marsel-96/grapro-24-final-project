@@ -2,6 +2,7 @@ module;
 
 #include <_pch.h>
 
+#include "itugl/application/Window.h"
 #include "ituGL/shader/ShaderUniformCollection.h"
 
 #include "ituGL/asset/ShaderLoader.h"
@@ -14,10 +15,14 @@ export module terrain.heightmap_cpu;
 import app.util.mesh;
 import app.util.texture;
 
+import app.camera;
+
 export class TerrainHeightmapCPU {
 
     ShaderLoader m_vertexShaderLoader;
     ShaderLoader m_fragmentShaderLoader;
+
+    ManagedCamera m_camera;
 
     std::shared_ptr<Material> m_terrainMaterial;
     std::shared_ptr<Texture2DObject> m_terrainTexture;
@@ -29,8 +34,13 @@ public:
 
     TerrainHeightmapCPU()
         : m_vertexShaderLoader(Shader::VertexShader),
-          m_fragmentShaderLoader(Shader::FragmentShader) {
-    }
+          m_fragmentShaderLoader(Shader::FragmentShader),
+          m_camera(
+              20.0f,
+              0.5f,
+              glm::vec3(10.0f, 20.0f, 10.0f),
+              glm::vec3(0.0f, 0.0f, 0.0f)
+          ) {}
 
 private:
 
@@ -47,13 +57,11 @@ private:
         m_terrainMaterial->SetUniformValue("Color", glm::vec4(1.0f));
         m_terrainMaterial->SetUniformValue("Heightmap", m_heightmapTexture);
         m_terrainMaterial->SetUniformValue("AlbedoTexture", m_terrainTexture);
-
-
     }
 
 public:
 
-    void Initialize() {
+    void Initialize(const Window& window) {
 
         {
             auto loader = Texture2DLoader(TextureObject::FormatR, TextureObject::InternalFormatR8);
@@ -74,14 +82,29 @@ public:
         CreateTerrainMesh(*m_terrainMesh, size.x, size.y, 1.0f);
 
         InitShader();
+
+        m_camera.Initialize(window);
     }
 
-    [[nodiscard]] const Material& GetMaterial() const {
-        return *m_terrainMaterial;
+    void Update(const Window& window, const float deltaTime) {
+        m_camera.UpdateCamera(window, deltaTime);
     }
 
-    [[nodiscard]] const Mesh& GetMesh() const {
-        return *m_terrainMesh;
+    void Render() const {
+        const auto& material = *m_terrainMaterial;
+        const auto& shaderProgram = *material.GetShaderProgram();
+        const auto& mesh = *m_terrainMesh;
+        const auto& worldMatrix = glm::mat4(1.0f);
+
+        material.Use();
+
+        const auto locationWorldMatrix = shaderProgram.GetUniformLocation("WorldMatrix");
+        const auto locationViewProjMatrix = shaderProgram.GetUniformLocation("ViewProjMatrix");
+
+        material.GetShaderProgram()->SetUniform(locationWorldMatrix, worldMatrix);
+        material.GetShaderProgram()->SetUniform(locationViewProjMatrix, m_camera.GetViewProjectionMatrix());
+
+        mesh.DrawSubmesh(0);
     }
 
 };
