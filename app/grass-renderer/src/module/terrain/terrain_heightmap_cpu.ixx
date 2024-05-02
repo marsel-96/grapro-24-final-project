@@ -2,6 +2,7 @@ module;
 
 #include <_pch.h>
 
+#include "Scene.h"
 #include "itugl/application/Window.h"
 #include "ituGL/shader/ShaderUniformCollection.h"
 
@@ -17,7 +18,7 @@ import app.util.texture;
 
 import app.camera;
 
-export class TerrainHeightmapCPU {
+export class TerrainHeightmapCPU final : public Scene {
 
     ShaderLoader m_vertexShaderLoader;
     ShaderLoader m_fragmentShaderLoader;
@@ -61,7 +62,7 @@ private:
 
 public:
 
-    void Initialize(const Window& window) {
+    void Initialize(const Window& window) override {
 
         {
             auto loader = Texture2DLoader(TextureObject::FormatR, TextureObject::InternalFormatR8);
@@ -86,11 +87,11 @@ public:
         m_camera.Initialize(window);
     }
 
-    void Update(const Window& window, const float deltaTime) {
+    void Update(const Window& window, const float deltaTime) override {
         m_camera.UpdateCamera(window, deltaTime);
     }
 
-    void Render() const {
+    void Render() override {
         const auto& material = *m_terrainMaterial;
         const auto& shaderProgram = *material.GetShaderProgram();
         const auto& mesh = *m_terrainMesh;

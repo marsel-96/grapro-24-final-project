@@ -14,6 +14,6 @@ target_sources(${TARGET_NAME}
         FILE_SET CXX_MODULES FILES ${target_mod})
 
 target_precompile_headers(${TARGET_NAME} PRIVATE src/_pch/_pch.h)
-target_include_directories(${TARGET_NAME} PRIVATE src/_pch)
+target_include_directories(${TARGET_NAME} PRIVATE src/_pch src/include)
 
 target_link_libraries(${TARGET_NAME} PRIVATE itugl)
