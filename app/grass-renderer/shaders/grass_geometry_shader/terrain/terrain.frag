@@ -1,10 +1,6 @@
 #version 330 core
 
-in vec3 WorldPosition;
-in vec3 WorldNormal;
 in vec2 TexCoord;
-in float Height;
-
 out vec4 FragColor;
 
 uniform vec4 Color;
@@ -13,6 +9,9 @@ uniform vec2 ColorTextureScale;
 
 void main()
 {
+	float yScale = 64.0f;
+	float yShift = 16.0f;
+
 	vec4 color = texture(AlbedoTexture, TexCoord * ColorTextureScale);
 	FragColor = Color * color;
 }

@@ -65,8 +65,8 @@ export void CreateTerrainMesh(Mesh &mesh, const unsigned int gridX, const unsign
 
             glm::vec3 normal(0.0f, 1.0f, 0.0f);
             glm::vec2 texCoord(
-                static_cast<float>(i) / static_cast<float>(columnCount),
-                static_cast<float>(j) / static_cast<float>(rowCount)
+                static_cast<float>(i),
+                static_cast<float>(j)
             );
 
             vertices.emplace_back(position, normal, texCoord);

@@ -13,7 +13,7 @@ export module app;
 
 import terrain.heightmap_cpu;
 import terrain.heightmap_gpu;
-import terrain.grass_geromertry_shader;
+import terrain.grass_geometry_shader;
 
 import app.camera;
 import app.ui;
@@ -23,9 +23,41 @@ export class GrassRenderer final : public Application {
     UIManager m_ui;
 
     std::vector<std::unique_ptr<Scene>> m_scenes;
-    unsigned short m_currentSceneIndex = 1;
+    unsigned short m_currentSceneIndex = 2;
 
     Scene* m_currentscene = nullptr;
+
+private:
+
+    void fixme(Window& _window) {
+        static bool wireframeEnabled = false;
+        static bool vsyncEnabled = true;
+
+        glfwSetWindowUserPointer(_window.GetInternalWindow(), &GetDevice());
+        glfwSetKeyCallback(
+            _window.GetInternalWindow(),
+            [] (
+                GLFWwindow *window,
+                const int key,
+                int scancode,
+                const int action,
+                int mods
+            ) {
+                const auto device = static_cast<DeviceGL*>(glfwGetWindowUserPointer(window));
+
+                if (key == GLFW_KEY_F1 && action == GLFW_PRESS)
+                {
+                    wireframeEnabled = !wireframeEnabled;
+                    device->SetWireframeEnabled(wireframeEnabled);
+                }
+                if (key == GLFW_KEY_F2 && action == GLFW_PRESS)
+                {
+                    vsyncEnabled = !vsyncEnabled;
+                    device->SetVSyncEnabled(vsyncEnabled);
+                }
+            }
+        );
+    }
 
 protected:
 
@@ -37,17 +69,14 @@ protected:
 
         m_scenes.emplace_back(std::make_unique<TerrainHeightmapCPU>());
         m_scenes.emplace_back(std::make_unique<TerrainHeightmapGPU>());
+        m_scenes.emplace_back(std::make_unique<GrassGeometryShader>(*this));
 
-        for (const auto& scene : m_scenes) {
-            scene->Initialize(window);
-        }
+        GetDevice().EnableFeature(GL_DEPTH_TEST);
 
-        GetDevice().EnableFeature(GL_DEPTH_TEST); // Enable depth test
-        GetDevice().SetWireframeEnabled(true); // Enable wireframe
+        fixme(window);
 
-        if (m_currentSceneIndex >= 0) {
-            m_currentscene = m_scenes[m_currentSceneIndex].get();
-        }
+        m_currentscene = m_scenes[m_currentSceneIndex].get();
+        m_currentscene->Initialize(window);
     }
 
     void Update() override {

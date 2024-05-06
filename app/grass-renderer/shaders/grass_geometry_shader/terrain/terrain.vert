@@ -7,11 +7,9 @@ layout (location = 2) in vec2 VertexTexCoord;
 out vec3 WorldPosition;
 out vec3 WorldNormal;
 out vec2 TexCoord;
-out float Height;
 
 uniform mat4 WorldMatrix;
 uniform mat4 ViewProjMatrix;
-uniform sampler2D Heightmap;
 
 void main()
 {
