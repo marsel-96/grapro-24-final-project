@@ -13,6 +13,7 @@ export module app;
 
 import terrain.heightmap_cpu;
 import terrain.heightmap_gpu;
+import terrain.grass_compute_shader;
 import terrain.grass_geometry_shader;
 
 import app.camera;
@@ -23,7 +24,7 @@ export class GrassRenderer final : public Application {
     UIManager m_ui;
 
     std::vector<std::unique_ptr<Scene>> m_scenes;
-    unsigned short m_currentSceneIndex = 2;
+    unsigned short m_currentSceneIndex = 3;
 
     Scene* m_currentscene = nullptr;
 
@@ -70,6 +71,7 @@ protected:
         m_scenes.emplace_back(std::make_unique<TerrainHeightmapCPU>());
         m_scenes.emplace_back(std::make_unique<TerrainHeightmapGPU>());
         m_scenes.emplace_back(std::make_unique<GrassGeometryShader>(*this));
+        m_scenes.emplace_back(std::make_unique<GrassComputeShader>(*this));
 
         GetDevice().EnableFeature(GL_DEPTH_TEST);
 

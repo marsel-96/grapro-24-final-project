@@ -1,0 +1,102 @@
+#version 450
+
+layout (local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+const float M_PI = 3.1415926535897932384626433832795;
+
+layout(std430, binding = 0) writeonly buffer TRANSFORM_MATRICES
+{
+    mat4 TransformMatrices[];
+};
+
+struct VertexAttribute
+{
+    vec4 position;
+};
+
+layout(std430, binding = 1) readonly buffer TERRAIN_VERTICES
+{
+    VertexAttribute Vertices[];
+};
+
+layout(std430, binding = 2) readonly buffer TERRAIN_TRIANGLES
+{
+    int Indices[];
+};
+
+uniform uint TerrainTriangleCount;
+uniform float Scale;
+uniform float MinBladeHeight;
+uniform float MaxBladeHeight;
+uniform float MinOffset;
+uniform float MaxOffset;
+uniform mat4 TerrainObjectToWorld;
+
+float random(vec2 seed) {
+    return fract(
+        sin(dot(seed.xy, vec2(12.9898,78.233))) * 43758.5453123
+    );
+}
+
+float randomRange(vec2 seed, float min, float max)
+{
+    float randnum = random(seed);
+    return mix(min, max, randnum);
+}
+
+// Function to rotate around the y-axis by a specified angle.
+mat4 rotationMatrixY(float angle)
+{
+    float s = sin(angle);
+    float c = cos(angle);
+
+    return mat4
+    (
+        c,  0,  s,  0,
+        0,  1,  0,  0,
+        -s, 0,  c,  0,
+        0,  0,  0,  1
+    );
+}
+
+void main()
+{
+    uvec3 id = gl_GlobalInvocationID.xyz;
+
+    // Avoid running 'overflow' tasks when the number of tasks
+    // wasn't divisible by the number of threads.
+    if (id.x > TerrainTriangleCount)
+    {
+        return;
+    }
+
+    uint triStart = id.x * 3;
+
+    vec3 posA = Vertices[Indices[triStart]].position.xyz;
+    vec3 posB = Vertices[Indices[triStart + 1]].position.xyz;
+    vec3 posC = Vertices[Indices[triStart + 2]].position.xyz;
+
+    vec3 triangleCenterPos = (posA + posB + posC) / 3.0f;
+
+    vec2 randomSeed1 = posA.xz;
+    vec2 randomSeed2 = posB.xz;
+
+    float scaleY = Scale * randomRange(randomSeed1, MinBladeHeight, MaxBladeHeight);
+
+    float offsetX = randomRange(randomSeed1, MinOffset, MaxOffset);
+    float offsetZ = randomRange(randomSeed2, MinOffset, MaxOffset);
+
+    mat4 grassTransformMatrix  = mat4
+    (
+        Scale,	0,		0,		triangleCenterPos.x + offsetX,
+        0,		scaleY,	0,		triangleCenterPos.y,
+        0,		0,		Scale,	triangleCenterPos.z + offsetZ,
+        0,		0,		0,		1
+    );
+
+    mat4 randomRotationMatrix = rotationMatrixY(
+        random(randomSeed1) * 2 * M_PI
+    );
+
+    TransformMatrices[id.x] = TerrainObjectToWorld * grassTransformMatrix * randomRotationMatrix;
+}
