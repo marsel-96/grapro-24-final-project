@@ -100,21 +100,23 @@ public:
         std::span<const TVertex> vertices, std::span<const TElement> elements,
         TIterator it, const TIterator itEnd, const SemanticMap& locations = SemanticMap());
 
-    inline unsigned int GetVertexBufferCount() const { return static_cast<unsigned int>(m_vbos.size()); }
-    inline const VertexBufferObject& GetVertexBuffer(unsigned int vboIndex) const { return m_vbos[vboIndex]; }
+    [[nodiscard]] unsigned int GetVertexBufferCount() const { return static_cast<unsigned int>(m_vbos.size()); }
+    [[nodiscard]] const VertexBufferObject& GetVertexBuffer(const unsigned int vboIndex) const { return m_vbos[vboIndex]; }
 
-    inline unsigned int GetElementBufferCount() const { return static_cast<unsigned int>(m_ebos.size()); }
-    inline const ElementBufferObject& GetElementBuffer(unsigned int eboIndex) const { return m_ebos[eboIndex]; }
+    [[nodiscard]] unsigned int GetElementBufferCount() const { return static_cast<unsigned int>(m_ebos.size()); }
+    [[nodiscard]] const ElementBufferObject& GetElementBuffer(const unsigned int eboIndex) const { return m_ebos[eboIndex]; }
 
-    inline unsigned int GetVertexArrayCount() const { return static_cast<unsigned int>(m_vaos.size()); }
-    inline const VertexArrayObject& GetVertexArray(unsigned int vaoIndex) const { return m_vaos[vaoIndex]; }
+    [[nodiscard]] unsigned int GetVertexArrayCount() const { return static_cast<unsigned int>(m_vaos.size()); }
+    [[nodiscard]] const VertexArrayObject& GetVertexArray(const unsigned int vaoIndex) const { return m_vaos[vaoIndex]; }
 
-    inline unsigned int GetSubmeshCount() const { return static_cast<unsigned int>(m_submeshes.size()); }
-    inline const VertexArrayObject& GetSubmeshVertexArray(unsigned int submeshIndex) const { return m_vaos[m_submeshes[submeshIndex].vaoIndex]; }
-    inline const Drawcall& GetSubmeshDrawcall(unsigned int submeshIndex) const { return m_submeshes[submeshIndex].drawcall; }
+    [[nodiscard]] unsigned int GetSubmeshCount() const { return static_cast<unsigned int>(m_submeshes.size()); }
+    [[nodiscard]] const VertexArrayObject& GetSubmeshVertexArray(const unsigned int submeshIndex) const { return m_vaos[m_submeshes[submeshIndex].vaoIndex]; }
+    [[nodiscard]] const Drawcall& GetSubmeshDrawcall(const unsigned int submeshIndex) const { return m_submeshes[submeshIndex].drawcall; }
 
     // Draws a submesh
     void DrawSubmesh(int submeshIndex) const;
+
+    void DrawSubmesh(int submeshIndex, unsigned int instances) const;
 
 private:
 
@@ -127,14 +129,14 @@ private:
 
 private:
 
-    inline VertexBufferObject& GetVertexBuffer(unsigned int vboIndex) { return m_vbos[vboIndex]; }
+    VertexBufferObject& GetVertexBuffer(const unsigned int vboIndex) { return m_vbos[vboIndex]; }
 
-    inline ElementBufferObject& GetElementBuffer(unsigned int eboIndex) { return m_ebos[eboIndex]; }
+    ElementBufferObject& GetElementBuffer(const unsigned int eboIndex) { return m_ebos[eboIndex]; }
 
-    inline VertexArrayObject& GetVertexArray(unsigned int vaoIndex) { return m_vaos[vaoIndex]; }
+    VertexArrayObject& GetVertexArray(const unsigned int vaoIndex) { return m_vaos[vaoIndex]; }
 
-    inline const Submesh& GetSubmesh(unsigned int submeshIndex) const { return m_submeshes[submeshIndex]; }
-    inline Submesh& GetSubmesh(unsigned int submeshIndex) { return m_submeshes[submeshIndex]; }
+    [[nodiscard]] const Submesh& GetSubmesh(const unsigned int submeshIndex) const { return m_submeshes[submeshIndex]; }
+    Submesh& GetSubmesh(const unsigned int submeshIndex) { return m_submeshes[submeshIndex]; }
 
     // Set a vertex attribute in a VAO, using the specified layout, and increases the location index according to the size of the attribute
     void SetupVertexAttribute(VertexArrayObject& vao, const VertexAttribute::Layout& attributeLayout, GLuint& location, const SemanticMap& locations);

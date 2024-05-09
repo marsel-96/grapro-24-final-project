@@ -34,6 +34,8 @@ public:
     // Execute the drawcall
     void Draw() const;
 
+    void Draw(unsigned int instances) const;
+
 private:
     // Type of primitive to be rendered
     Primitive m_primitive;

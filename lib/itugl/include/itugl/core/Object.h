@@ -2,6 +2,24 @@
 
 #include <glad/glad.h>
 
+// Usage: How the buffer will be used
+// Hints to OpenGL so it can optimize the operations on this buffer
+// Combinations of 2 different properties. Unified in one value to be consistent with OpenGL:
+// - Based on how frequently the user will be changing the buffer's data:
+//   * STATIC: The user will set the data once
+//   * DYNAMIC: The user will set the data occasionally
+//   * STREAM: The user will be changing the data after every use.Or almost every use
+// - Based on what the user will be doing with the buffer:
+//   * DRAW: The user will be writing data to the buffer, but the user will not read it
+//   * READ: The user will not be writing data, but the user will be reading it back
+//   * COPY: The user will be neither writing nor reading the data
+enum Usage : GLenum
+{
+   StaticDraw = GL_STATIC_DRAW,    StaticRead = GL_STATIC_READ,    StaticCopy = GL_STATIC_COPY,
+   DynamicDraw = GL_DYNAMIC_DRAW,  DynamicRead = GL_DYNAMIC_READ,  DynamicCopy = GL_DYNAMIC_COPY,
+   StreamDraw = GL_STREAM_DRAW,    StreamRead = GL_STREAM_READ,    StreamCopy = GL_STREAM_COPY
+};
+
 class Object
 {
 public:
@@ -43,7 +61,7 @@ protected:
 
 protected:
     // We define a constant to represent null handles. In OpenGL we use 0 to represent this
-    static const Handle NullHandle = 0;
+    static constexpr Handle NullHandle = 0;
 
 private:
     // Objects are stored inside OpenGL state machine. Our objects only contain the handle
