@@ -8,6 +8,8 @@
 
 #include <iostream>
 
+#include "itugl/utils/ShaderIncludeReplacer.h"
+
 ShaderLoader::ShaderLoader(Shader::Type type) : m_type(type)
 {
 }
@@ -25,11 +27,8 @@ bool ShaderLoader::IsValid(std::span<const char*> paths)
 Shader ShaderLoader::Load(const char* path)
 {
     Shader shader(m_type);
-    std::ifstream file(path);
-    assert(file.is_open());
-    std::stringstream stringStream;
-    stringStream << file.rdbuf() << '\0';
-    shader.SetSource(stringStream.str().c_str());
+    const auto sourceString = ShaderIncludeReplacer::LoadShaderWithIncludes(path);
+    shader.SetSource(sourceString.c_str());
     Compile(shader);
     return shader;
 }
@@ -37,6 +36,7 @@ Shader ShaderLoader::Load(const char* path)
 Shader ShaderLoader::Load(std::span<const char*> paths)
 {
     Shader shader(m_type);
+
     std::vector<std::stringstream> stringStreams(paths.size());
     std::vector<std::string> sourceCodeStrings(paths.size());
     std::vector<const char*> sourceCode(paths.size());

@@ -16,7 +16,7 @@
     {
       "name": "glad",
       "features": [
-        "gl-api-45"
+        "gl-api-45", "extensions"
       ]
     }
   ]
