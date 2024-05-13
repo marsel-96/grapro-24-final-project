@@ -4,7 +4,7 @@ file(GLOB_RECURSE target_inc "*.h" )
 file(GLOB_RECURSE target_src "*.cpp" )
 file(GLOB_RECURSE target_mod "*.ixx" )
 
-file(GLOB_RECURSE shaders "*.vert" "*.frag" "*.geom" "*.glsl")
+file(GLOB_RECURSE shaders "*.vert" "*.frag" "*.geom" "*.glsl" "*.tesc" "*tese" "*comp")
 source_group("Shaders" FILES ${shaders})
 
 add_compile_definitions(GLM_ENABLE_EXPERIMENTAL)
