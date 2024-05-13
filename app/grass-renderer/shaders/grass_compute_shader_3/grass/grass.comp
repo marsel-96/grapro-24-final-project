@@ -1,0 +1,213 @@
+#version 450
+
+#extension GL_ARB_shading_language_include : enable
+
+#include "include/webgl-noise/noise2D.glsl"
+#include "include/hash-without-sine/hash.glsl"
+#include "include/constant.glsl"
+#include "include/blade.glsl"
+#include "include/random.glsl"
+#include "include/culling.glsl"
+
+layout (local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout(binding = 0, offset = 0) uniform atomic_uint bladeIndexAtomic;
+layout(std430, binding = 0) writeonly buffer GRASS_BLADES_SSBO
+{
+    GrassBlade Blades[];
+};
+
+uniform uint Resolution;
+
+uniform float GrassSpacing;
+uniform vec3 PlaneCentre;
+
+uniform float GrassBladeMapsSize;
+
+uniform sampler2D GrassBladeHeightMap;
+uniform sampler2D GrassBladeTypeMap;
+uniform float GrassBladeHeightMin;
+uniform float GrassBladeHeightMax;
+uniform float GrassBladeHeightJitter;
+
+uniform float JitterStrength;
+
+uniform mat4 ViewProjectionMatrix;
+uniform mat4 WorldMatrix;
+
+uniform sampler2D HeightMapTexture;
+uniform float HeightMapSize;
+uniform float HeightMultiplier;
+uniform vec2 TerrainSize;
+
+float GetHeight(vec2 uv, vec2 hash)
+{
+    return texture(HeightMapTexture, uv).r * HeightMultiplier;
+}
+
+float GetGrassBladeHeight(vec2 uv, vec2 hash)
+{
+    return texture(GrassBladeHeightMap, uv).r;
+}
+
+vec3 GetPosition(uvec2 laneId, vec2 hash)
+{
+    // TODO Maybe I can use random jitter based on hash or lane id instead of the hash
+    float jitterX = hash.x;
+    float jitterZ = hash.y;
+
+    vec3 position = vec3(laneId.x, 0, laneId.y) * GrassSpacing;
+    // Jitter to range [JitterStrength, -JitterStrength]
+    vec3 jitter = (vec3(jitterX, 0, jitterZ) * 2 - 1) * JitterStrength;
+
+    return position + jitter;
+}
+
+uint GetGrassBladeType(vec2 uv, vec2 hash)
+{
+    vec4 texels = textureGather(GrassBladeTypeMap, uv, 0);
+    vec2 texelPos = fract(uv * GrassBladeMapsSize);
+
+    vec4 weights = vec4(
+        texelPos.x * texelPos.y,
+        (1 - texelPos.x) * texelPos.y,
+        (1 - texelPos.x) * (1 - texelPos.y),
+        texelPos.x * (1 - texelPos.y)
+    );
+
+    // TODO: Index of the grass blade type, now uselsess but I had fun writing it. Please future me do use it for something
+    return uint(
+        randomWeighted(texels, weights, hash) * 255
+    );
+}
+
+void main ()
+{
+    uvec2 id = gl_GlobalInvocationID.xy;
+    vec2 hash = hash22(id.xy);
+
+    if (id.x >= Resolution && id.y >= Resolution)
+    {
+        return;
+    }
+
+    // Position Coordinates are in the range [0, TerrainSize]
+    vec3 position = GetPosition(id, hash);
+
+    // UV Coordinates have to consider the terrain size
+    vec2 uv = clamp(position.xz / TerrainSize, 0.0, 1.0);
+
+    position.y = GetHeight(uv, hash);
+
+    // TODO: Frustum culling, Distance culling, Occlusion culling
+    vec4 worldPositon = WorldMatrix * vec4(position, 1.0);
+    vec4 clipPosition = ViewProjectionMatrix * worldPositon;
+
+    if (FrustumCulling(clipPosition))
+    {
+        return;
+    }
+
+    float grassBladeHeight = GetGrassBladeHeight(uv, hash);
+    grassBladeHeight += hash.x * GrassBladeHeightJitter;
+    if (grassBladeHeight <= GrassBladeHeightMin)
+    {
+        return;
+    }
+
+    grassBladeHeight = grassBladeHeight * GrassBladeHeightMax;
+    uint indexGrassBlade = GetGrassBladeType(uv, hash);
+
+    GrassBlade blade;
+
+    const uint idx = atomicCounterIncrement(bladeIndexAtomic);
+
+    blade.position = PlaneCentre + position;
+    blade.height = grassBladeHeight;
+    blade.grassType = indexGrassBlade;
+    blade.hash = hash12(hash);
+    blade.width = 0.1;
+    blade.tilt = 1.0;
+    blade.bend = 1.0;
+    blade.sideCurve = 1.0;
+    blade.facing = vec2(0.5, 0.5);
+    blade.windForce = 1.0;
+    blade.clumpColor = 1.0;
+    blade.clumpFacing = vec2(0.5, 0.5);
+
+    Blades[idx] = blade;
+
+//    float2 clumpUV = position.xz * float2(_ClumpScale.xx);
+//
+//    //Retrieve clump data for this blade from voronoi texture
+//    //This includes the clump parameter id, and the centre of this clump in texture space
+//    float3 clumpData = ClumpTex.SampleLevel(samplerClumpTex, clumpUV,0).xyz;
+//
+//    //This is the index of the clump parameter set for this blade
+//    float clumpParamsIndex = clumpData.x;
+//
+//    //Retrieve the correct set of blade parameters
+//    ClumpParametersStruct bladeParameters = _ClumpParameters[int((clumpParamsIndex))];
+//
+//    //bladeParameters = _ClumpParameters[2];
+//
+//    //Compute the clump centre in world space by finding its offsetted position in texture space and -dividing- that by the voronoi tiling
+//    float2 clumpCentre = (clumpData.yz + floor(clumpUV))/float2(_ClumpScale.xx);
+//
+//    //Pull position to centre of clump based on pullToCentre
+//    position.xz = lerp(position.xz, clumpCentre, bladeParameters.pullToCentre);
+//
+//
+//    float3 raisedVertex = getTransformedVertex(position);
+//    float3 posToCam =  normalize(_WSpaceCameraPos - raisedVertex);
+//
+//    uint distanceCull = 1;
+//    //Distance culling
+//    #if DISTANCE_CULL_ENABLED
+//
+//            distanceCull = DistanceCull(raisedVertex, hash.x, posToCam);
+//    #endif
+//
+//        float2 worldUV = position.xz;
+//
+//    float3 bitangent = float3(1, 0, 0);
+//    float3 tangent   = float3(0, 0, 1);
+//
+//    //Get y height from heightmap
+//    // Also calc surface normal from height map. Probably better to read from a texture
+//    float3 vertexBitangent = getTransformedVertex(position + bitangent*0.01);
+//    float3 vertexTangent = getTransformedVertex(position + tangent*0.01);
+//
+//
+//    float3 newBitangent = (vertexBitangent-raisedVertex ).xyz;
+//    float3 newTangent = (vertexTangent-raisedVertex).xyz;
+//
+//    float3 norm = normalize(cross(newTangent,newBitangent));
+//
+//
+//
+//
+//    //Get clipPos for easier frustum culling in clip space
+//    float4 clipPos = mul(_VP_MATRIX, float4(raisedVertex,1));
+//
+//    //float4 screenPos = ComputeScreenPos(clipPos);
+//
+//    //float2 screenUV = screenPos.xy / screenPos.w;
+//
+//    //float depth =  CameraDepthTexture.SampleLevel(MyLinearClampSampler, screenUV, 0).x;
+//    //_DepthTexture[uv.xy];
+//    //float depth = DepthTexture[float2(0,0)];
+//
+//    //float depth = 1;
+//
+//    uint occlusionCull = 1;
+//
+//    //Frustum culling
+//    uint isInFrustum = FrustumCull(clipPos);
+//
+//
+//
+//    //isInFrustum = 1;
+//    //distanceCull = 1;
+//    occlusionCull = 1;
+}
