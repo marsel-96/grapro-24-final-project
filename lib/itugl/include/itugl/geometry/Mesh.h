@@ -9,6 +9,8 @@
 #include <vector>
 #include <unordered_map>
 
+#include "itugl/core/IndexedBufferObject.h"
+
 // Class that groups several VBO, EBO and VAO that are part of the same object
 // Can contain several drawcalls using the data in those objects
 class Mesh
@@ -51,6 +53,7 @@ public:
 
     // Adds a new submesh, with the index of the VAO to be bound, and the parameters to create a Drawcall
     unsigned int AddSubmesh(unsigned int vaoIndex, Drawcall::Primitive primitive, GLint first, GLsizei count, Data::Type eboType);
+
 
     // (C++) 7
     // Adds a new submesh, adding a new VAO that uses a single VBO, no EBO, and providing the parameters to create a Drawcall
@@ -113,10 +116,14 @@ public:
     [[nodiscard]] const VertexArrayObject& GetSubmeshVertexArray(const unsigned int submeshIndex) const { return m_vaos[m_submeshes[submeshIndex].vaoIndex]; }
     [[nodiscard]] const Drawcall& GetSubmeshDrawcall(const unsigned int submeshIndex) const { return m_submeshes[submeshIndex].drawcall; }
 
+    void AddDrawIndirectBuffer(int submeshIndex, const IndexedBufferObject& buffer) const;
+
     // Draws a submesh
     void DrawSubmesh(int submeshIndex) const;
 
     void DrawSubmesh(int submeshIndex, unsigned int instances) const;
+
+    void DrawIndirect(int submeshIndex) const;
 
 private:
 

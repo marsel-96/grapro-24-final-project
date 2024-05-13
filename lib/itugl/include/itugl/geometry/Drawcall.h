@@ -36,6 +36,12 @@ public:
 
     void Draw(unsigned int instances) const;
 
+    void DrawIndirect() const;
+
+    [[nodiscard]] GLsizei GetCount() const { return m_count; }
+    [[nodiscard]] GLint GetFirst() const { return m_first; }
+
+
 private:
     // Type of primitive to be rendered
     Primitive m_primitive;

@@ -63,3 +63,21 @@ void Drawcall::Draw(const unsigned int instances) const
         glDrawElementsInstanced(primitive, m_count, static_cast<GLenum>(m_eboType), basePointer + m_first, static_cast<GLsizei>(instances));
     }
 }
+
+void Drawcall::DrawIndirect() const {
+    assert(IsValid());
+    assert(VertexArrayObject::IsAnyBound());
+
+    const auto primitive = static_cast<GLenum>(m_primitive);
+    if (m_eboType == Data::Type::None)
+    {
+        // If no EBO is present, use glDrawArrays
+        glDrawArraysIndirect(primitive, nullptr);
+    }
+    else
+    {
+        // If there is an EBO, use glDrawElements
+        assert(ElementBufferObject::IsSupportedType(m_eboType));
+        glDrawElementsIndirect(primitive, static_cast<GLenum>(m_eboType), nullptr);
+    }
+}

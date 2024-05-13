@@ -1,5 +1,7 @@
 #include <itugl/geometry/Mesh.h>
 
+#include "itugl/core/IndexedBufferObject.h"
+
 Mesh::Mesh()
 {
 }
@@ -35,6 +37,16 @@ unsigned int Mesh::AddSubmesh(unsigned int vaoIndex,
     return AddSubmesh(vaoIndex, Drawcall(primitive, count, eboType, first));
 }
 
+void Mesh::AddDrawIndirectBuffer(int submeshIndex, const IndexedBufferObject& buffer) const {
+    const auto handle = buffer.GetHandle();
+    auto& vertexArray = GetSubmeshVertexArray(submeshIndex);
+
+    vertexArray.Bind();
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, handle);
+
+    VertexArrayObject::Unbind();
+}
+
 // Bind the VAO and render the drawcall of the submesh
 void Mesh::DrawSubmesh(int submeshIndex) const
 {
@@ -53,6 +65,16 @@ void Mesh::DrawSubmesh(int submeshIndex, unsigned int instances) const
     submesh.drawcall.Draw(instances);
     //VertexArrayObject::Unbind(); // No need to unbind
 }
+
+void Mesh::DrawIndirect(const int submeshIndex) const
+{
+    const auto&[vaoIndex, drawcall] = GetSubmesh(submeshIndex);
+    const VertexArrayObject& vao = GetVertexArray(vaoIndex);
+    vao.Bind();
+    drawcall.DrawIndirect();
+    //VertexArrayObject::Unbind(); // No need to unbind
+}
+
 
 void Mesh::SetupVertexAttribute(VertexArrayObject& vao, const VertexAttribute::Layout& attributeLayout, GLuint& location, const SemanticMap& locations)
 {
