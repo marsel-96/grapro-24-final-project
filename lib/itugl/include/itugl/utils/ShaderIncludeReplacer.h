@@ -1,5 +1,6 @@
 #pragma once
 
+#include <set>
 #include <string>
 
 //	===========
@@ -61,7 +62,16 @@ MISCELLANEOUS
 */
 
 class ShaderIncludeReplacer {
+
+    struct RecursiveData {
+        std::set<std::string> includes;
+        unsigned char depth = 0;
+    };
+
+    static std::string LoadShaderWithIncludes(const std::string &path, RecursiveData &data);
+
     static std::string GetFilePath(const std::string& fullPath);
+
 public:
     static std::string LoadShaderWithIncludes(const std::string& path);
 };

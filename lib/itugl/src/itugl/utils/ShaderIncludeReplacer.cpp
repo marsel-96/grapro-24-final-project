@@ -1,20 +1,26 @@
 #include "ituGl/utils/ShaderIncludeReplacer.h"
 
+#include <set>
+
 constexpr std::string_view INCLUDE_IDENTIFIER = "#include";
 constexpr std::string_view VERSION_IDENTIFIER = "#version";
 
+// INCLUDE_IDENTIFIER size + 2 for the space and the quotation mark
 constexpr unsigned int OFFSET_INCLUDE = INCLUDE_IDENTIFIER.size() + 2;
 
-// Return the source code of the complete shader
-std::string ShaderIncludeReplacer::LoadShaderWithIncludes(const std::string &path) {
-    static bool isRecursiveCall = false;
+struct RecursiveData {
+    std::set<std::string> includes;
+    unsigned char depth = 0;
+};
 
-    std::string fullSourceCode;
+
+std::string ShaderIncludeReplacer::LoadShaderWithIncludes(const std::string &path, RecursiveData &data) { // NOLINT(*-no-recursion)
+    std::string code;
     std::ifstream file(path);
 
     if (!file.is_open()) {
         std::cerr << "ERROR: could not open the shader at: " << path << "\n" << std::endl;
-        return fullSourceCode;
+        return code;
     }
 
     std::string lineBuffer;
@@ -22,35 +28,43 @@ std::string ShaderIncludeReplacer::LoadShaderWithIncludes(const std::string &pat
     while (std::getline(file, lineBuffer)) {
         // Look for the new shader include identifier
         if (lineBuffer.find(INCLUDE_IDENTIFIER) != std::string::npos) {
-            // Remove the include identifier, this will cause the path to remain
+
+            // Include the same file only once
             lineBuffer.erase(0, OFFSET_INCLUDE);
-            lineBuffer.erase(lineBuffer.size() - 1, 1);
-            // The include path is relative to the current shader file path
-            lineBuffer.insert(0, GetFilePath(path));
+            lineBuffer.pop_back();
 
-            // By using recursion, the new include file can be extracted
-            // and inserted at this location in the shader source code
-            isRecursiveCall = true;
-            fullSourceCode += LoadShaderWithIncludes(lineBuffer);
+            if (!data.includes.contains(lineBuffer)) {
 
-            // Do not add this line to the shader source code, as the include
-            // path would generate a compilation issue in the final source code
+                data.includes.insert(lineBuffer);
+                data.depth++;
+
+                lineBuffer.insert(0, GetFilePath(path));
+                code += LoadShaderWithIncludes(lineBuffer, data);
+            }
+
             continue;
         }
-        if (lineBuffer.find(VERSION_IDENTIFIER) != std::string::npos && isRecursiveCall) {
+        // Remopve the version identifier from the included files
+        if (lineBuffer.find(VERSION_IDENTIFIER) != std::string::npos && data.depth > 0) {
             continue;
         }
-        fullSourceCode += lineBuffer + '\n';
+        code += lineBuffer + '\n';
     }
-
-    // Only add the null terminator at the end of the complete file,
-    // essentially skipping recursive function calls this way
-    if (!isRecursiveCall)
-        fullSourceCode += '\0';
 
     file.close();
 
-    return fullSourceCode;
+    return code;
+}
+
+// Return the source code of the complete shader
+std::string ShaderIncludeReplacer::LoadShaderWithIncludes(const std::string &path) {
+
+    RecursiveData recursiveData;
+
+    // Add the null terminator at the end of the file
+    std::string sourceCode = LoadShaderWithIncludes(path, recursiveData) + '\0';
+
+    return sourceCode;
 }
 
 std::string ShaderIncludeReplacer::GetFilePath(const std::string &fullPath) {

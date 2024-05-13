@@ -87,7 +87,7 @@ void ShaderUniformCollection::ExtractUniforms(const NameSet& filteredUniforms)
 
         // Get the uniform location
         ShaderProgram::Location location = GetUniformLocation(uniformName);
-        assert(location >= 0);
+        //assert(location >= 0);
 
         Data::Type type;
         UniformDimension dimension;
@@ -112,7 +112,10 @@ void ShaderUniformCollection::ExtractUniforms(const NameSet& filteredUniforms)
         }
         else
         {
-            // Unsupported uniform type
+            if (glType == GL_UNSIGNED_INT_ATOMIC_COUNTER)
+            {
+                continue;
+            }
             assert(false);
         }
     }
