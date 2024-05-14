@@ -277,6 +277,8 @@ public:
         m_grassInstantiatorCompute->Compute();
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
+        m_grassBladeSSBO->BindToIndex(0);
+
         GrassRenderer::Render();
     }
 

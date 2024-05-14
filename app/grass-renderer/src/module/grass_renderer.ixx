@@ -192,8 +192,6 @@ protected:
         m_renderer.RegisterShaderProgram(shaderProgram,
             [=](const ShaderProgram& _shaderProgram, const glm::mat4& worldMatrix, const Camera& camera, bool cameraChanged)
             {
-                // m_grassBladeSSBO->BindToIndex(0);
-
                 if (cameraChanged)
                 {
                     _shaderProgram.SetUniform(cameraPositionLocation, camera.ExtractTranslation());
