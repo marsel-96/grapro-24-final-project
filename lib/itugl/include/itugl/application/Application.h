@@ -17,22 +17,22 @@ public:
     int Run();
 
     // Get time in seconds from the start of the application
-    float GetCurrentTime() const { return m_currentTime; }
+    [[nodiscard]] float GetCurrentTime() const { return m_currentTime; }
 
     // Get time in seconds of the current frame
-    float GetDeltaTime() const { return m_deltaTime; }
+    [[nodiscard]] float GetDeltaTime() const { return m_deltaTime; }
 
-protected:
     // (C++) 1
     // Get the OpenGL device
-    const DeviceGL& GetDevice() const { return m_device; }
+    [[nodiscard]] const DeviceGL& GetDevice() const { return m_device; }
     DeviceGL& GetDevice() { return m_device; }
 
     // (C++) 1
     // Get the main window of the application
-    inline Window& GetMainWindow() { return m_mainWindow; }
-    inline const Window& GetMainWindow() const { return m_mainWindow; }
+    Window& GetMainWindow() { return m_mainWindow; }
+    const Window& GetMainWindow() const { return m_mainWindow; }
 
+protected:
     // Test if the application is currently running
     bool IsRunning() const;
 

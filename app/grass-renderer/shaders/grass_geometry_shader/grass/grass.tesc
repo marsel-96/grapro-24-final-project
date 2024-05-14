@@ -2,7 +2,8 @@
 
 layout (vertices = 3) out;
 
-uniform float TessellationUniform;
+uniform vec4 TessellationLevelOuter;
+uniform vec2 TessellationLevelInner;
 
 in VS_OUT {
     vec3 position;
@@ -26,12 +27,12 @@ void main()
 
     if (gl_InvocationID == 0)
     {
-        gl_TessLevelOuter[0] = TessellationUniform;
-        gl_TessLevelOuter[1] = TessellationUniform;
-        gl_TessLevelOuter[2] = TessellationUniform;
-        gl_TessLevelOuter[3] = TessellationUniform;
+        gl_TessLevelOuter[0] = TessellationLevelOuter.x;
+        gl_TessLevelOuter[1] = TessellationLevelOuter.y;
+        gl_TessLevelOuter[2] = TessellationLevelOuter.z;
+        gl_TessLevelOuter[3] = TessellationLevelOuter.w;
 
-        gl_TessLevelInner[0] = TessellationUniform;
-        gl_TessLevelInner[1] = TessellationUniform;
+        gl_TessLevelInner[0] = TessellationLevelInner.x;
+        gl_TessLevelInner[1] = TessellationLevelInner.y;
     }
 }

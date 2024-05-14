@@ -11,9 +11,17 @@ out vec2 TexCoord;
 uniform mat4 WorldMatrix;
 uniform mat4 ViewProjMatrix;
 
+uniform sampler2D HeightMapTexture;
+uniform float HeightMapSize;
+uniform float HeightMultiplier;
+uniform vec2 TerrainSize;
+
 void main()
 {
-	WorldPosition = (WorldMatrix * vec4(VertexPosition, 1.0)).xyz;
+	vec2 heightMapUV = VertexTexCoord / TerrainSize;
+	float height = texture(HeightMapTexture, heightMapUV).r * HeightMultiplier;
+
+	WorldPosition = (WorldMatrix * vec4(VertexPosition.x, height, VertexPosition.z, 1.0)).xyz;
 	WorldNormal = (WorldMatrix * vec4(VertexNormal, 0.0)).xyz;
 	TexCoord = VertexTexCoord;
 	gl_Position = ViewProjMatrix * vec4(WorldPosition, 1.0);

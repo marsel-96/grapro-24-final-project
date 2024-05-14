@@ -22,13 +22,29 @@ Drawcall::Drawcall(Primitive primitive, GLsizei count, Data::Type eboType, GLint
     assert(count > 0);
 }
 
-// Execute the drawcall
 void Drawcall::Draw() const
+{
+    switch(m_command) {
+        case DrawCommand::Standard:
+            DrawStandard();
+            break;
+        case DrawCommand::Instanced:
+            DrawInstanced(m_instances);
+            break;
+        case DrawCommand::Indirect:
+            DrawIndirect();
+            break;
+
+    }
+}
+
+// Execute the drawcall
+void Drawcall::DrawStandard() const
 {
     assert(IsValid());
     assert(VertexArrayObject::IsAnyBound());
 
-    GLenum primitive = static_cast<GLenum>(m_primitive);
+    const auto primitive = static_cast<GLenum>(m_primitive);
     if (m_eboType == Data::Type::None)
     {
         // If no EBO is present, use glDrawArrays
@@ -44,12 +60,12 @@ void Drawcall::Draw() const
 }
 
 // Execute the drawcall
-void Drawcall::Draw(const unsigned int instances) const
+void Drawcall::DrawInstanced(const unsigned int instances) const
 {
     assert(IsValid());
     assert(VertexArrayObject::IsAnyBound());
 
-    GLenum primitive = static_cast<GLenum>(m_primitive);
+    const auto primitive = static_cast<GLenum>(m_primitive);
     if (m_eboType == Data::Type::None)
     {
         // If no EBO is present, use glDrawArrays

@@ -6,6 +6,13 @@
 class Drawcall
 {
 public:
+
+    enum class DrawCommand {
+        Standard,
+        Instanced,
+        Indirect
+    };
+
     enum class Primitive : GLenum
     {
         Invalid = ~0U,
@@ -29,20 +36,32 @@ public:
     Drawcall(Primitive primitive, GLsizei count, Data::Type eboType, GLint first = 0);
 
     // Check if the drawcall is valid
-    inline bool IsValid() const { return m_primitive != Primitive::Invalid && m_count > 0; }
+    bool IsValid() const { return m_primitive != Primitive::Invalid && m_count > 0; }
 
     // Execute the drawcall
     void Draw() const;
 
-    void Draw(unsigned int instances) const;
+    void DrawStandard() const;
+
+    void DrawInstanced(unsigned int instances) const;
 
     void DrawIndirect() const;
 
     [[nodiscard]] GLsizei GetCount() const { return m_count; }
     [[nodiscard]] GLint GetFirst() const { return m_first; }
 
+    void SetCommand(const DrawCommand command) { m_command = command; }
+    [[nodiscard]] DrawCommand GetCommand() const { return m_command; }
+
+    void SetInstances(const unsigned int instances) { m_instances = instances; }
+    [[nodiscard]] unsigned int GetInstances() const { return m_instances; }
 
 private:
+
+    DrawCommand m_command = DrawCommand::Standard;
+
+    unsigned int m_instances = 0;
+
     // Type of primitive to be rendered
     Primitive m_primitive;
 

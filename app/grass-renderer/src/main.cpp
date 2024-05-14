@@ -1,7 +1,8 @@
-import app;
+import terrain.grass_compute_shader;
+import terrain.grass_geometry_shader;
 
 int main() {
-    GrassRenderer grassRenderer;
-    grassRenderer.Run();
+    GrassGeometryShader app;
+    app.Run();
     return 0;
 }

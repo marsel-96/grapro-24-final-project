@@ -12,15 +12,17 @@ class CameraController
 public:
     CameraController();
 
-    inline bool IsEnabled() const { return m_enabled; }
-    inline void SetEnabled(bool enabled) { m_enabled = enabled; }
+    [[nodiscard]] bool IsEnabled() const { return m_enabled; }
+    void SetEnabled(const bool enabled) { m_enabled = enabled; }
 
-    inline std::shared_ptr<SceneCamera> GetCamera() { return m_camera; }
-    inline std::shared_ptr<const SceneCamera> GetCamera() const { return m_camera; }
-    inline void SetCamera(std::shared_ptr<SceneCamera> camera) { m_camera = camera; }
+    std::shared_ptr<SceneCamera> GetCamera() { return m_camera; }
+    [[nodiscard]] std::shared_ptr<const SceneCamera> GetCamera() const { return m_camera; }
+    void SetCamera(std::shared_ptr<SceneCamera> camera) { m_camera = camera; }
+
+    void SetTranslationSpeed(const float speed) { m_translationSpeed = speed; }
+    void SetRotationSpeed(const float speed) { m_rotationSpeed = speed; }
 
     void Update(const Window& window, float deltaTime);
-
     void DrawGUI(DearImGui& imGui);
 
 private:

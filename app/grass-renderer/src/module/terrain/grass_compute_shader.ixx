@@ -1,260 +1,181 @@
 module;
 
-#include <memory>
 #include <_pch.h>
 
-#include "Scene.h"
-#include "itugl/application/Application.h"
-#include "itugl/application/Window.h"
+#include "itugl/asset/ModelLoader.h"
 #include "ituGL/shader/ShaderUniformCollection.h"
-
-#include "ituGL/core/BufferObject.h"
 #include "ituGL/asset/ShaderLoader.h"
 #include "itugl/asset/Texture2DLoader.h"
+#include "itugl/buffer/AtomicCounterBufferObject.h"
 #include "itugl/buffer/SharedStorageBufferObject.h"
-#include "itugl/buffer/UniformBufferObject.h"
+#include "itugl/camera/Camera.h"
+#include "itugl/camera/CameraController.h"
 #include "itugl/compute/Compute.h"
 #include "itugl/geometry/Mesh.h"
-#include "ituGL/geometry/VertexFormat.h"
+#include "itugl/lighting/PointLight.h"
+#include "itugl/renderer/ForwardRenderPass.h"
+#include "itugl/renderer/Renderer.h"
+#include "itugl/scene/SceneModel.h"
 #include "ituGL/shader/Material.h"
 
 export module terrain.grass_compute_shader;
 
-import app.util.texture;
+import app.grass_renderer_common;
 import app.util.mesh;
-import app.camera;
 
-struct GrassMeshVertex {
-    GrassMeshVertex() = default;
+constexpr std::array<unsigned int, 1> reset {};
 
-    GrassMeshVertex(
-        const glm::vec3 &position,
-        const glm::vec3 &normal,
-        const glm::vec3 &tangent,
-        const glm::vec2 &uv
-    ): position(position), normal(normal), tangent(tangent), uv(uv) {}
-
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec3 tangent;
-    glm::vec2 uv;
-};
-
-GrassMeshVertex GenerateGrassVertex(
-    const glm::vec3 &position,
-    const glm::vec3 &normal,
-    const glm::vec3 &tangent,
-    const glm::vec2 &uv
-) {
-    return GrassMeshVertex(position, normal, tangent, uv);
-}
-
-void CreateGrassMesh(
-    Mesh &mesh,
-    const int width,
-    const int height,
-    const unsigned int bladeSegments
-) {
-    // Define the vertex format (should match the vertex structure)
-    VertexFormat vertexFormat;
-
-    vertexFormat.AddVertexAttribute<float>(3);
-    vertexFormat.AddVertexAttribute<float>(3);
-    vertexFormat.AddVertexAttribute<float>(3);
-    vertexFormat.AddVertexAttribute<float>(2);
-
-    std::vector<GrassMeshVertex> vertices;
-
-    constexpr auto normal = glm::vec3(0, 0, 1);
-    constexpr auto tangent = glm::vec3(0, 1, 0);
-
-    const auto width_half = static_cast<float>(width) / 2.0f;
-
-    vertices.emplace_back(GenerateGrassVertex(glm::vec3(-width_half, 0, 0), normal, tangent, glm::vec2(0, 0)));
-    vertices.emplace_back(GenerateGrassVertex(glm::vec3(width_half, 0, 0), normal, tangent, glm::vec2(1, 0)));
-
-    for (int i = 1; i < bladeSegments; i++)
-    {
-        const auto t = i / static_cast<float>(bladeSegments);
-
-        // Add below the line declaring float t.
-        const float segmentHeight = height * t;
-        const float segmentWidth = width_half * (1 - t);
-
-        vertices.emplace_back(GenerateGrassVertex(glm::vec3(-segmentWidth, segmentHeight, 0), normal, tangent, glm::vec2(0, t)));
-        vertices.emplace_back(GenerateGrassVertex(glm::vec3(+segmentWidth, segmentHeight, 0), normal, tangent, glm::vec2(1, t)));
-    }
-
-    vertices.emplace_back(GenerateGrassVertex(glm::vec3(0, height,0), normal, tangent, glm::vec2(0.5, 1)));
-
-    mesh.AddSubmesh<GrassMeshVertex, VertexFormat::LayoutIterator>(
-        Drawcall::Primitive::TriangleStrip,
-        vertices,
-        vertexFormat.LayoutBegin(static_cast<int>(vertices.size()), true),
-        vertexFormat.LayoutEnd());
-
-}
-
-using ComputeVertices = glm::vec4;
-std::pair<std::vector<ComputeVertices>, std::vector<unsigned int>> GetTerrainMeshPoints(
-    const unsigned int width,
-    const unsigned int height,
-    const unsigned int resolution
-) {
-    // Define the vertex format (should match the vertex structure)
-    VertexFormat vertexFormat;
-
-    vertexFormat.AddVertexAttribute<float>(3);
-    vertexFormat.AddVertexAttribute<float>(3);
-    vertexFormat.AddVertexAttribute<float>(3);
-    vertexFormat.AddVertexAttribute<float>(2);
-
-    std::vector<ComputeVertices> vertices;
-    std::vector<unsigned int> indices;
-
-    const auto f_res = static_cast<float>(resolution);
-    const auto f_width = static_cast<float>(width);
-    const auto f_height = static_cast<float>(height);
-
-    // Iterate over each VERTEX
-    for (unsigned int j = 0; j < resolution; ++j) {
-        for (unsigned int i = 0; i < resolution; ++i) {
-
-            const auto f_i = static_cast<float>(i);
-            const auto f_j = static_cast<float>(j);
-
-            // Vertex data for this vertex only
-            glm::vec4 position(
-                -f_width / 2.0f + f_width * f_i / f_res,
-                1.0f,
-                -f_height / 2.0f + f_height * f_j / f_res,
-                1.0f
-            );
-
-            vertices.emplace_back(position);
-
-            // Index data for quad formed by previous vertices and current
-            if (i > 0 && j > 0) {
-                unsigned int top_right = j * resolution + i; // Current vertex
-                unsigned int top_left = top_right - 1;
-                unsigned int bottom_right = top_right - resolution;
-                unsigned int bottom_left = bottom_right - 1;
-
-                //Triangle 1
-                indices.push_back(bottom_left);
-                indices.push_back(bottom_right);
-                indices.push_back(top_left);
-
-                //Triangle 2
-                indices.push_back(bottom_right);
-                indices.push_back(top_left);
-                indices.push_back(top_right);
-            }
-        }
-    }
-
-    return std::pair(vertices, indices);
-}
-
-export class GrassComputeShader final : public Scene {
-
-    const Application& m_application;
-
-    ShaderLoader m_vertexShaderLoader;
-    ShaderLoader m_fragmentShaderLoader;
-    ShaderLoader m_tassellationControlShaderLoader;
-    ShaderLoader m_tassellationEvaluationShaderLoader;
-    ShaderLoader m_geometryShaderLoader;
-    ShaderLoader m_computeShaderLoader;
-
-    ManagedCamera m_camera;
+export class GrassComputeShader final : public GrassRenderer {
 
     std::shared_ptr<Material> m_terrainMaterial;
     std::shared_ptr<Material> m_grassMaterial;
 
-    std::shared_ptr<Texture2DObject> m_grassWindDistorsionMap;
+    std::shared_ptr<Texture2DObject> m_windTexture;
+    std::shared_ptr<Texture2DObject> m_terrainHeightMap;
     std::shared_ptr<Texture2DObject> m_terrainTexture;
+    std::shared_ptr<Texture2DObject> m_grassBladeHeightMap;
 
-    std::shared_ptr<Mesh> m_grassMesh;
-    std::shared_ptr<Mesh> m_terrainMesh;
+    float m_heightMapSize = 512;
+    float m_heightMultiplier = 18.0f;
 
-    unsigned int m_patchWidth = 512;
-    unsigned int m_patchHeight = 512;
+    float m_grassBladeMapsSize = 512.0f;
+    float m_grassBladeHeightMin = 0.15f;
+    float m_grassBladeHeightMax = 5.0f;
+    float m_grassBladeHeightJitter = 0.15f;
 
-    unsigned int m_trianglesCount = 0;
+    float m_jitterStrength = 2.0f;
+
+    int m_patchWidth = 128;
+    int m_patchHeight = 128;
+
+    unsigned int m_resolution = 768;
+
+    std::shared_ptr<Model> m_grassModel;
+
+    std::shared_ptr<AtomicCounterBufferObject> m_atomicCounterBuffer;
+    std::shared_ptr<SharedStorageBufferObject> m_drawIndirectBuffer;
+    std::shared_ptr<SharedStorageBufferObject> m_grassBladeSSBO;
 
     std::shared_ptr<ComputeCall> m_grassCompute;
+    std::shared_ptr<ComputeCall> m_grassInstantiatorCompute;
 
 public:
-    explicit GrassComputeShader(const Application& application)
-        : m_application(application),
-          m_vertexShaderLoader(Shader::VertexShader),
-          m_fragmentShaderLoader(Shader::FragmentShader),
-          m_tassellationControlShaderLoader(Shader::TesselationControlShader),
-          m_tassellationEvaluationShaderLoader(Shader::TesselationEvaluationShader),
-          m_geometryShaderLoader(Shader::GeometryShader),
-          m_computeShaderLoader(Shader::ComputeShader),
-          m_camera(
-              20.0f,
-              0.5f,
-              glm::vec3(10.0f, 20.0f, 10.0f),
-              glm::vec3(0.0f, 0.0f, 0.0f)
-          ) {
-    }
+
+    GrassComputeShader() = default;
 
 private:
+
+    void InitGrassMesh() { // NOLINT(*-convert-member-functions-to-static)
+        ModelLoader modelLoader;
+
+        m_grassModel = modelLoader.LoadShared("assets/model/grass_compute_shader/grass_blade.fbx");
+        m_drawIndirectBuffer = std::make_shared<SharedStorageBufferObject>();
+        m_drawIndirectBuffer->Bind();
+        m_drawIndirectBuffer->AllocateData<unsigned int[5]>(1);
+        m_drawIndirectBuffer->Unbind();
+
+        m_grassModel->GetMesh().AddDrawIndirectBuffer(0, *m_drawIndirectBuffer);
+    }
+
+    void InitTextures() { // NOLINT(*-convert-member-functions-to-static)
+        {
+            auto loader = Texture2DLoader(TextureObject::FormatRGB, TextureObject::InternalFormatRGB8);
+            m_terrainTexture = std::make_unique<Texture2DObject>(
+                loader.Load("assets/textures/dirt.png")
+            );
+        }
+        {
+            auto loader = Texture2DLoader(TextureObject::FormatR, TextureObject::InternalFormatR8);
+            m_terrainHeightMap = std::make_unique<Texture2DObject>(
+                loader.Load("assets/textures/grass_compute_shader/heightmap.png")
+            );
+            m_terrainHeightMap->Bind();
+            m_terrainHeightMap->SetParameter(TextureObject::ParameterEnum::WrapS, GL_CLAMP_TO_EDGE);
+            m_terrainHeightMap->SetParameter(TextureObject::ParameterEnum::WrapT, GL_CLAMP_TO_EDGE);
+            m_terrainHeightMap->Unbind();
+        }
+        {
+            auto loader = Texture2DLoader(TextureObject::FormatR, TextureObject::InternalFormatR8);
+            m_grassBladeHeightMap = std::make_unique<Texture2DObject>(
+                loader.Load("assets/textures/grass_compute_shader/grass_height.png")
+            );
+            m_grassBladeHeightMap->Bind();
+            m_grassBladeHeightMap->SetParameter(TextureObject::ParameterEnum::WrapS, GL_CLAMP_TO_EDGE);
+            m_grassBladeHeightMap->SetParameter(TextureObject::ParameterEnum::WrapT, GL_CLAMP_TO_EDGE);
+            m_grassBladeHeightMap->Unbind();
+        }
+
+        {
+            auto loader = Texture2DLoader(TextureObject::FormatR, TextureObject::InternalFormatR8);
+            m_windTexture = std::make_unique<Texture2DObject>(
+                loader.Load("assets/textures/grass_compute_shader/wind.png")
+            );
+        }
+    }
 
     void InitGrassCompute() {
         const auto cs = m_computeShaderLoader.Load("shaders/grass_compute_shader/grass/grass.comp");
         auto shaderProgram = std::make_shared<ShaderProgram>();
         shaderProgram->Build(cs);
 
-        const auto &[vertices, indices] = GetTerrainMeshPoints(m_patchWidth, m_patchHeight, m_patchWidth);
+        m_grassCompute = std::make_shared<ComputeCall>(shaderProgram,
+            glm::uvec3(
+                m_resolution / 32,
+                m_resolution / 32,
+                1
+            )
+        );
 
-        const auto ssboPositions = std::make_shared<SharedStorageBufferObject>();
-        ssboPositions->Bind();
-        ssboPositions->AllocateData<ComputeVertices>(vertices);
-        ssboPositions->Unbind();
+        m_atomicCounterBuffer = std::make_shared<AtomicCounterBufferObject>();
+        m_atomicCounterBuffer->Bind();
+        m_atomicCounterBuffer->AllocateData<unsigned int>(reset, DynamicDraw);
+        m_atomicCounterBuffer->Unbind();
 
-        const auto ssboIndices = std::make_shared<SharedStorageBufferObject>();
-        ssboIndices->Bind();
-        ssboIndices->AllocateData<unsigned int>(indices);
-        ssboIndices->Unbind();
+        m_grassBladeSSBO = std::make_shared<SharedStorageBufferObject>();
 
-        const auto ssboMatrices = std::make_shared<SharedStorageBufferObject>();
+        m_grassBladeSSBO->Bind();
+        m_grassBladeSSBO->AllocateData<float[16]>(m_resolution * m_resolution);
+        m_grassBladeSSBO->Unbind();
 
-        ssboMatrices->Bind();
-        ssboMatrices->AllocateData<glm::mat4>(m_patchWidth * m_patchHeight);
-        ssboMatrices->Unbind();
+        m_grassCompute->SetUniformValue("Resolution", m_resolution);
+        m_grassCompute->SetUniformValue("GrassSpacing", m_patchWidth / static_cast<float>(m_resolution));
+        m_grassCompute->SetUniformValue("PlaneCentre", glm::vec3(m_patchWidth / -2.0f, 0.0f, m_patchHeight / -2.0f));
+        m_grassCompute->SetUniformValue("GrassBladeMapsSize", m_grassBladeMapsSize);
+        m_grassCompute->SetUniformValue("GrassBladeHeightMap", m_grassBladeHeightMap);
+        m_grassCompute->SetUniformValue("GrassBladeHeightMin", m_grassBladeHeightMin);
+        m_grassCompute->SetUniformValue("GrassBladeHeightMax", m_grassBladeHeightMax);
+        m_grassCompute->SetUniformValue("GrassBladeTypeMap", m_grassBladeHeightMap);
+        m_grassCompute->SetUniformValue("JitterStrength", m_jitterStrength);
+        m_grassCompute->SetUniformValue("ViewProjectionMatrix", m_camera->GetViewProjectionMatrix());
+        m_grassCompute->SetUniformValue("WorldMatrix", glm::mat4(1.0f));
+        m_grassCompute->SetUniformValue("HeightMapTexture", m_terrainHeightMap);
+        m_grassCompute->SetUniformValue("HeightMapSize", m_heightMapSize);
+        m_grassCompute->SetUniformValue("HeightMultiplier", m_heightMultiplier);
+        m_grassCompute->SetUniformValue("TerrainSize", glm::vec2(m_patchWidth, m_patchHeight));
+        m_grassCompute->SetUniformValue("GrassBladeHeightJitter", m_grassBladeHeightJitter);
 
-        m_trianglesCount = m_patchWidth * m_patchHeight * 2;
-        m_grassCompute = std::make_shared<ComputeCall>(shaderProgram, glm::uvec3(m_trianglesCount / 64, 1, 1));
+        m_grassCompute->AddBufferBinding(m_grassBladeSSBO, 0);
+        m_grassCompute->AddBufferBinding(m_atomicCounterBuffer, 0);
+    }
 
-        m_grassCompute->SetUniformValue("TerrainTriangleCount", m_trianglesCount);
-        m_grassCompute->SetUniformValue("Scale", 1.0f);
-        m_grassCompute->SetUniformValue("MinBladeHeight", 1.0f);
-        m_grassCompute->SetUniformValue("MaxBladeHeight", 1.5f);
-        m_grassCompute->SetUniformValue("MinOffset", 0.0f);
-        m_grassCompute->SetUniformValue("MaxOffset", 0.25f);
-        m_grassCompute->SetUniformValue("TerrainObjectToWorld", glm::mat4(1.0));
+    void InitGrassInstantiatorCompute() {
+        const auto cs = m_computeShaderLoader.Load("shaders/grass_compute_shader/grass/grass_instantiator.comp");
+        auto shaderProgram = std::make_shared<ShaderProgram>();
+        shaderProgram->Build(cs);
 
-        m_grassCompute->AddBufferBinding(ssboMatrices, 0);
-        m_grassCompute->AddBufferBinding(ssboPositions, 1);
-        m_grassCompute->AddBufferBinding(ssboIndices, 2);
+        m_grassInstantiatorCompute = std::make_shared<ComputeCall>(shaderProgram,glm::uvec3(1,1,1));
+        assert(m_grassModel);
+        const auto& drawCall = m_grassModel->GetMesh().GetSubmeshDrawcall(0);
 
+        m_grassInstantiatorCompute->SetUniformValue("FirstIndex", static_cast<unsigned int>(drawCall.GetFirst()));
+        m_grassInstantiatorCompute->SetUniformValue("BaseVertex", 0u);
+        m_grassInstantiatorCompute->SetUniformValue("BaseInstance", 0u);
+        m_grassInstantiatorCompute->SetUniformValue("Count", static_cast<unsigned int>(drawCall.GetCount()));
+
+        m_grassInstantiatorCompute->AddBufferBinding(m_drawIndirectBuffer, 0);
     }
 
     void InitGrassShader() {
-        {
-            auto loader = Texture2DLoader(TextureObject::FormatRG, TextureObject::InternalFormatRG8);
-            m_grassWindDistorsionMap = std::make_unique<Texture2DObject>(
-                loader.Load("assets/textures/wind.png")
-            );
-        }
-
-        m_grassMesh = std::make_shared<Mesh>();
-        CreateGrassMesh(*m_grassMesh, 1, 4, 5);
-
         const auto vs = m_vertexShaderLoader.Load("shaders/grass_compute_shader/grass/grass.vert");
         const auto fs = m_fragmentShaderLoader.Load("shaders/grass_compute_shader/grass/grass.frag");
 
@@ -266,84 +187,97 @@ private:
         m_grassMaterial->SetUniformValue("Color", glm::vec4(1.0f));
         m_grassMaterial->SetUniformValue("BottomColor", glm::vec4(0.06f, 0.38f, 0.07f, 1.0f));
         m_grassMaterial->SetUniformValue("TopColor", glm::vec4(0.56f, 0.83f, 0.32f, 1.0f));
+        m_grassMaterial->SetUniformValue("Offset", 0.4f);
+        m_grassMaterial->SetUniformValue("Height", 0.4f);
+        m_grassMaterial->SetUniformValue("WindDirection", glm::vec2(0.5, 0.5));
+        m_grassMaterial->SetUniformValue("Time", 0.0f);
+        m_grassMaterial->SetUniformValue("WindNoiseScale", 1.0f);
+        m_grassMaterial->SetUniformValue("NoiseOffset", -0.5f);
+        m_grassMaterial->SetUniformValue("MeshDeformationLimitTop", 0.08f);
+        m_grassMaterial->SetUniformValue("MeshDeformationLimitLow", 2.0f);
+        m_grassMaterial->SetUniformValue("WindSpeed", 2.0f);
+        m_grassMaterial->SetUniformValue("ShadingOffset", 2.0f);
+        m_grassMaterial->SetUniformValue("ShadingParameter", 1.7f);
 
+        AddStandardLightUniform(grassShaderProgram);
+
+        m_grassModel->SetMaterial(0, m_grassMaterial);
+        auto& drawCall = m_grassModel->GetMesh().GetSubmeshDrawcall(0);
+        drawCall.SetCommand(Drawcall::DrawCommand::Indirect);
+
+        m_scene.AddSceneNode(std::make_shared<SceneModel>("blades", m_grassModel));
+
+        m_grassCompute->AddBufferBinding(m_grassBladeSSBO, 0);
     }
 
     void InitTerrainShader() {
-        {
-            auto loader = Texture2DLoader(TextureObject::FormatRGB, TextureObject::InternalFormatRGB8);
-            m_terrainTexture = std::make_unique<Texture2DObject>(
-                loader.Load("assets/textures/dirt.png")
-            );
-        }
-
-        m_terrainMesh = std::make_shared<Mesh>();
-        CreateTerrainMesh(*m_terrainMesh, 512, 512, 1.0);
-
         const auto vs = m_vertexShaderLoader.Load("shaders/grass_compute_shader/terrain/terrain.vert");
         const auto fs = m_fragmentShaderLoader.Load("shaders/grass_compute_shader/terrain/terrain.frag");
 
         auto shaderProgram = std::make_shared<ShaderProgram>();
         shaderProgram->Build(vs, fs);
 
+        // This Shader needs only the world matrix and the view projection matrix
+        AddMVCUniform(shaderProgram);
+
         // // Terrain materials
         m_terrainMaterial = std::make_unique<Material>(shaderProgram);
         m_terrainMaterial->SetUniformValue("Color", glm::vec4(1.0f));
         m_terrainMaterial->SetUniformValue("ColorTextureScale", glm::vec2(0.125f));
         m_terrainMaterial->SetUniformValue("AlbedoTexture", m_terrainTexture);
+        m_terrainMaterial->SetUniformValue("HeightMapTexture", m_terrainHeightMap);
+        m_terrainMaterial->SetUniformValue("HeightMapSize", m_heightMapSize);
+        m_terrainMaterial->SetUniformValue("HeightMultiplier", m_heightMultiplier);
+        m_terrainMaterial->SetUniformValue("TerrainSize", glm::vec2(m_patchWidth, m_patchHeight));
+
+        const auto terrainMesh = std::make_shared<Mesh>();
+
+        CreateTerrainMesh(*terrainMesh, m_patchWidth, m_patchHeight, 1.0);
+
+        const auto terrain = std::make_shared<Model>(terrainMesh);
+        terrain->AddMaterial(m_terrainMaterial);
+
+        m_scene.AddSceneNode(std::make_shared<SceneModel>("terrain", terrain));
+    }
+
+    void InitRenderer() {
+        m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
     }
 
 public:
 
-    void Initialize(const Window& window) override {
-        InitGrassShader();
+    void Initialize() override {
+        GrassRenderer::Initialize();
+
+        InitCamera(
+            glm::vec3(-20, 70, 20),
+            glm::vec3(0, 0, 0),
+            glm::vec3(0, 1, 0)
+        );
+
+        InitLights();
+        InitRenderer();
+
+        InitGrassMesh();
+        InitTextures();
+
         InitTerrainShader();
         InitGrassCompute();
-
-        Compute();
-
-        m_camera.Initialize(window);
+        InitGrassInstantiatorCompute();
+        InitGrassShader();
     }
 
-    void Update(const Window& window, const float deltaTime) override {
-        m_camera.UpdateCamera(window, deltaTime);
-
-        m_grassMaterial->SetUniformValue("Time", m_application.GetCurrentTime());
+    void Update() override {
+        GrassRenderer::Update();
     }
 
     void Render() override {
-        const auto& worldMatrix = glm::mat4(1.0f);
-
-        m_grassCompute->BindBuffers();
-
-        Render(*m_terrainMaterial, *m_terrainMesh, worldMatrix);
-        Render(*m_grassMaterial, *m_grassMesh, worldMatrix, m_trianglesCount);
-    }
-
-    void Compute() const {
         m_grassCompute->Compute();
-
         glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-    }
+        m_grassInstantiatorCompute->Compute();
+        glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
-private:
-
-    void Render(const Material& material, const Mesh& mesh, const glm::mat4& worldMatrix, const unsigned int instances = 1) const {
-        const auto& shaderProgram = *material.GetShaderProgram();
-
-        material.Use();
-
-        const auto locationWorldMatrix = shaderProgram.GetUniformLocation("WorldMatrix");
-        const auto locationViewProjMatrix = shaderProgram.GetUniformLocation("ViewProjMatrix");
-
-        material.GetShaderProgram()->SetUniform(locationWorldMatrix, worldMatrix);
-        material.GetShaderProgram()->SetUniform(locationViewProjMatrix, m_camera.GetViewProjectionMatrix());
-
-        if (instances > 1) {
-            mesh.DrawSubmesh(0, instances);
-        } else {
-            mesh.DrawSubmesh(0);
-        }
+        GrassRenderer::Render();
     }
 
 };

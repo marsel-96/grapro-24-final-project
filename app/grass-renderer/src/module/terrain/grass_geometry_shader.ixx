@@ -2,22 +2,25 @@ module;
 
 #include <_pch.h>
 
-#include "Scene.h"
 #include "itugl/application/Application.h"
 #include "itugl/application/Window.h"
+#include "itugl/asset/ModelLoader.h"
 #include "ituGL/shader/ShaderUniformCollection.h"
 
 #include "ituGL/asset/ShaderLoader.h"
 #include "itugl/asset/Texture2DLoader.h"
 #include "itugl/geometry/Mesh.h"
+#include "itugl/geometry/Model.h"
 #include "ituGL/geometry/VertexFormat.h"
+#include "itugl/renderer/ForwardRenderPass.h"
+#include "itugl/scene/SceneModel.h"
 #include "ituGL/shader/Material.h"
 
 export module terrain.grass_geometry_shader;
 
 import app.util.texture;
 import app.util.mesh;
-import app.camera;
+import app.grass_renderer_common;
 
 struct GrassMeshVertex {
     GrassMeshVertex() = default;
@@ -35,7 +38,7 @@ struct GrassMeshVertex {
     glm::vec2 uv;
 };
 
-void CreateTerrainMeshPatch1(
+void CreateTerrainMeshPatch(
     Mesh &mesh,
     const unsigned int width,
     const unsigned int height,
@@ -106,96 +109,7 @@ void CreateTerrainMeshPatch1(
         vertexFormat.LayoutEnd());
 }
 
-void CreateTerrainMeshPatch2(
-    Mesh &mesh,
-    const unsigned int width,
-    const unsigned int height,
-    const unsigned int resolution
-) {
-    // Define the vertex format (should match the vertex structure)
-    VertexFormat vertexFormat;
-
-    vertexFormat.AddVertexAttribute<float>(3);
-    vertexFormat.AddVertexAttribute<float>(3);
-    vertexFormat.AddVertexAttribute<float>(3);
-    vertexFormat.AddVertexAttribute<float>(2);
-
-    std::vector<GrassMeshVertex> vertices;
-    std::vector<unsigned int> indices;
-
-    const auto f_res = static_cast<float>(resolution);
-    const auto f_width = static_cast<float>(width);
-    const auto f_height = static_cast<float>(height);
-
-    for (unsigned i = 0; i <= resolution - 1; i++) {
-        for (unsigned j = 0; j <= resolution - 1; j++) {
-            const auto f_i = static_cast<float>(i);
-            const auto f_j = static_cast<float>(j);
-
-            vertices.emplace_back(
-                glm::vec3(
-                    -f_width / 2.0f + f_width * f_i / f_res,
-                    1.0f,
-                    -f_height / 2.0f + f_height * f_j / f_res
-                ),
-                glm::vec3(0.0, 1.0, 0.0),
-                glm::vec3(1.0, 0.0, 0.0),
-                glm::vec2(f_i / f_res, f_j / f_res)
-            );
-            vertices.emplace_back(
-                glm::vec3(
-                    -f_width / 2.0f + f_width * (f_i + 1.0f) / f_res,
-                    1.0f,
-                    -f_height / 2.0f + f_height * f_j / f_res
-                ),
-                glm::vec3(0.0, 1.0, 0.0),
-                glm::vec3(1.0, 0.0, 0.0),
-                glm::vec2((f_i + 1.0f) / f_res, f_j / f_res)
-            );
-            vertices.emplace_back(
-                glm::vec3(
-                    -f_width / 2.0f + f_width * f_i / f_res,
-                    1.0f,
-                    -f_height / 2.0f + f_height * (f_j + 1.0f) / f_res
-                ),
-                glm::vec3(0.0, 1.0, 0.0),
-                glm::vec3(1.0, 0.0, 0.0),
-                glm::vec2(f_i / f_res, (f_j + 1.0f) / f_res)
-            );
-            vertices.emplace_back(
-                glm::vec3(
-                    -f_width / 2.0f + f_width * (f_i + 1.0f) / f_res,
-                    1.0f,
-                    -f_height / 2.0f + f_height * (f_j + 1.0f) / f_res
-                ),
-                glm::vec3(0.0, 1.0, 0.0),
-                glm::vec3(1.0, 0.0, 0.0),
-                glm::vec2((f_i + 1.0f) / f_res, (f_j + 1.0f) / f_res)
-            );
-        }
-    }
-
-    glPatchParameteri(GL_PATCH_VERTICES, 4);
-
-    mesh.AddSubmesh<GrassMeshVertex, VertexFormat::LayoutIterator>(
-        Drawcall::Primitive::Patches,
-        vertices,
-        vertexFormat.LayoutBegin(static_cast<int>(vertices.size()), true),
-        vertexFormat.LayoutEnd()
-    );
-}
-
-export class GrassGeometryShader final : public Scene {
-
-    const Application& m_application;
-
-    ShaderLoader m_vertexShaderLoader;
-    ShaderLoader m_fragmentShaderLoader;
-    ShaderLoader m_tassellationControlShaderLoader;
-    ShaderLoader m_tassellationEvaluationShaderLoader;
-    ShaderLoader m_geometryShaderLoader;
-
-    ManagedCamera m_camera;
+export class GrassGeometryShader final: public GrassRenderer  {
 
     std::shared_ptr<Material> m_terrainMaterial;
     std::shared_ptr<Material> m_grassMaterial;
@@ -206,82 +120,91 @@ export class GrassGeometryShader final : public Scene {
     std::shared_ptr<Mesh> m_grassMesh;
     std::shared_ptr<Mesh> m_terrainMesh;
 
+    float m_bladeForward = 0.38;
+    float m_bladeCurvature = 2;
+    glm::vec4 m_color = glm::vec4(1.0f);
+    glm::vec4 m_bottomColor = glm::vec4(0.06f, 0.38f, 0.07f, 1.0f);
+    glm::vec4 m_topColor = glm::vec4(0.56f, 0.83f, 0.32f, 1.0f);
+    float m_bendRotation = 0.25f;
+    float m_bladeWidth = 0.15f;
+    float m_bladeWidthRandom = 0.05f;
+    float m_bladeHeight = 2.85f;
+    float m_bladeHeightRandom = 0.8f;
+    glm::vec4 m_windFrequency = glm::vec4(0.025, 0.025, 0, 0);
+    float m_windStrength = 1.0f;
+    glm::vec4 m_windDistortionMapScaleOffset = glm::vec4(0.01f, 0.01f, 0.0f, 0.0f);
+    glm::vec4 m_tassellationLevelOuter = glm::vec4(8.0f);
+    glm::vec2 m_tassellationLevelInner = glm::vec2(8.0f);
+
 public:
-    explicit GrassGeometryShader(const Application& application)
-        : m_application(application),
-          m_vertexShaderLoader(Shader::VertexShader),
-          m_fragmentShaderLoader(Shader::FragmentShader),
-          m_tassellationControlShaderLoader(Shader::TesselationControlShader),
-          m_tassellationEvaluationShaderLoader(Shader::TesselationEvaluationShader),
-          m_geometryShaderLoader(Shader::GeometryShader),
-          m_camera(
-              20.0f,
-              0.5f,
-              glm::vec3(10.0f, 20.0f, 10.0f),
-              glm::vec3(0.0f, 0.0f, 0.0f)
-          ) {
-    }
+    GrassGeometryShader() = default;
 
 private:
 
-    void InitGrassShader() {
-        {
-            auto loader = Texture2DLoader(TextureObject::FormatRG, TextureObject::InternalFormatRG8);
-            m_grassWindDistorsionMap = std::make_unique<Texture2DObject>(
-                loader.Load("assets/textures/wind.png")
-            );
-        }
-
-        m_grassMesh = std::make_shared<Mesh>();
-        CreateTerrainMeshPatch1(*m_grassMesh, 512, 512, 128);
-
-        const auto vs = m_vertexShaderLoader.Load("shaders/grass_geometry_shader/grass/grass.vert");
-        const auto fs = m_fragmentShaderLoader.Load("shaders/grass_geometry_shader/grass/grass.frag");
-        const auto tcs = m_tassellationControlShaderLoader.Load("shaders/grass_geometry_shader/grass/grass.tesc");
-        const auto tes = m_tassellationEvaluationShaderLoader.Load("shaders/grass_geometry_shader/grass/grass.tese");
-        std::vector gsSource = {
-            "shaders/grass_geometry_shader/grass/grass.geom"
-        };
-        const auto gs = m_geometryShaderLoader.Load(gsSource);
-
-
-        auto grassShaderProgram = std::make_shared<ShaderProgram>();
-        grassShaderProgram->Build(vs, fs,&tcs, tes, gs);
-        // // Terrain materials
-        m_grassMaterial = std::make_unique<Material>(grassShaderProgram);
-        m_grassMaterial->SetUniformValue("Color", glm::vec4(1.0f));
-        m_grassMaterial->SetUniformValue("BottomColor", glm::vec4(0.06f, 0.38f, 0.07f, 1.0f));
-        m_grassMaterial->SetUniformValue("TopColor", glm::vec4(0.56f, 0.83f, 0.32f, 1.0f));
-        m_grassMaterial->SetUniformValue("BendRotation", 0.25f);
-        m_grassMaterial->SetUniformValue("BladeWidth", 0.15f);
-        m_grassMaterial->SetUniformValue("BladeWidthRandom", 0.05f);
-        m_grassMaterial->SetUniformValue("BladeHeight", 2.85f);
-        m_grassMaterial->SetUniformValue("BladeHeightRandom", 0.8f);
-        m_grassMaterial->SetUniformValue("TessellationUniform", 8.0f);
-        m_grassMaterial->SetUniformValue("WindDistortionMap", m_grassWindDistorsionMap);
-        m_grassMaterial->SetUniformValue("WindFrequency", glm::vec4(0.025, 0.025, 0, 0));
-        m_grassMaterial->SetUniformValue("WindStrength", 1.0f);
-        m_grassMaterial->SetUniformValue("Time", 0.0f);
-        m_grassMaterial->SetUniformValue("WindDistortionMapScaleOffset", glm::vec4(0.01f, 0.01f, 0.0f, 0.0f));
-
-
-    }
-
-    void InitTerrainShader() {
+    void InitTextures() {
         {
             auto loader = Texture2DLoader(TextureObject::FormatRGB, TextureObject::InternalFormatRGB8);
             m_terrainTexture = std::make_unique<Texture2DObject>(
                 loader.Load("assets/textures/dirt.png")
             );
         }
+        {
+            auto loader = Texture2DLoader(TextureObject::FormatRG, TextureObject::InternalFormatRG8);
+            m_grassWindDistorsionMap = std::make_unique<Texture2DObject>(
+                loader.Load("assets/textures/wind.png")
+            );
+        }
+    }
 
+    void InitGrassShader() {
+
+        m_grassMesh = std::make_shared<Mesh>();
+        CreateTerrainMeshPatch(*m_grassMesh, 512, 512, 128);
+
+        const auto vs = m_vertexShaderLoader.Load("shaders/grass_geometry_shader/grass/grass.vert");
+        const auto fs = m_fragmentShaderLoader.Load("shaders/grass_geometry_shader/grass/grass.frag");
+        const auto tcs = m_tassellationControlShaderLoader.Load("shaders/grass_geometry_shader/grass/grass.tesc");
+        const auto tes = m_tassellationEvaluationShaderLoader.Load("shaders/grass_geometry_shader/grass/grass.tese");
+        const auto gs = m_geometryShaderLoader.Load("shaders/grass_geometry_shader/grass/grass.geom");
+
+        auto grassShaderProgram = std::make_shared<ShaderProgram>();
+        grassShaderProgram->Build(vs, fs, &tcs, tes, gs);
+
+        AddStandardLightUniform(grassShaderProgram);
+
+        // // Terrain materials
+        m_grassMaterial = std::make_unique<Material>(grassShaderProgram);
+        m_grassMaterial->SetUniformValue("Color", m_color);
+        m_grassMaterial->SetUniformValue("BottomColor", m_bottomColor);
+        m_grassMaterial->SetUniformValue("TopColor", m_topColor);
+        m_grassMaterial->SetUniformValue("BendRotation", m_bendRotation);
+        m_grassMaterial->SetUniformValue("BladeWidth", m_bladeWidth);
+        m_grassMaterial->SetUniformValue("BladeWidthRandom", m_bladeWidthRandom);
+        m_grassMaterial->SetUniformValue("BladeHeight", m_bladeHeight);
+        m_grassMaterial->SetUniformValue("BladeHeightRandom", m_bladeHeightRandom);
+        m_grassMaterial->SetUniformValue("TessellationLevelOuter", m_tassellationLevelOuter);
+        m_grassMaterial->SetUniformValue("TessellationLevelInner", m_tassellationLevelInner);
+        m_grassMaterial->SetUniformValue("WindDistortionMap", m_grassWindDistorsionMap);
+        m_grassMaterial->SetUniformValue("WindFrequency", m_windFrequency);
+        m_grassMaterial->SetUniformValue("WindStrength", m_windStrength);
+        m_grassMaterial->SetUniformValue("WindDistortionMapScaleOffset", m_windDistortionMapScaleOffset);
+        m_grassMaterial->SetUniformValue("BladeForward", m_bladeForward);
+        m_grassMaterial->SetUniformValue("BladeCurvature", m_bladeCurvature);
+
+        const auto grassModel = std::make_shared<Model>(m_grassMesh);
+        grassModel->AddMaterial(m_grassMaterial);
+
+        m_scene.AddSceneNode(std::make_shared<SceneModel>("grass", grassModel));
+    }
+
+    void InitTerrainShader() {
         m_terrainMesh = std::make_shared<Mesh>();
         CreateTerrainMesh(*m_terrainMesh, 512, 512, 1.0);
 
         const auto vs = m_vertexShaderLoader.Load("shaders/grass_geometry_shader/terrain/terrain.vert");
         const auto fs = m_fragmentShaderLoader.Load("shaders/grass_geometry_shader/terrain/terrain.frag");
 
-        auto shaderProgram = std::make_shared<ShaderProgram>();
+        const auto& shaderProgram = std::make_shared<ShaderProgram>();
         shaderProgram->Build(vs, fs);
 
         // // Terrain materials
@@ -289,44 +212,44 @@ private:
         m_terrainMaterial->SetUniformValue("Color", glm::vec4(1.0f));
         m_terrainMaterial->SetUniformValue("ColorTextureScale", glm::vec2(0.125f));
         m_terrainMaterial->SetUniformValue("AlbedoTexture", m_terrainTexture);
+
+        AddMVCUniform(shaderProgram);
+
+        const auto terrain = std::make_shared<Model>(m_terrainMesh);
+        terrain->AddMaterial(m_terrainMaterial);
+
+        m_scene.AddSceneNode(std::make_shared<SceneModel>("terrain", terrain));
+    }
+
+    void InitRenderer() {
+        m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
     }
 
 public:
 
-    void Initialize(const Window& window) override {
+    void Initialize() override {
+        GrassRenderer::Initialize();
+
+        InitRenderer();
+        InitCamera(
+            glm::vec3(-20, 70, 20),
+            glm::vec3(0, 0, 0),
+            glm::vec3(0, 1, 0)
+        );
+        InitLights();
+        InitTextures();
         InitGrassShader();
         InitTerrainShader();
-
-        m_camera.Initialize(window);
     }
 
-    void Update(const Window& window, const float deltaTime) override {
-        m_camera.UpdateCamera(window, deltaTime);
-
-        m_grassMaterial->SetUniformValue("Time", m_application.GetCurrentTime());
+    void Update() override {
+        GrassRenderer::Update();
     }
 
     void Render() override {
-        const auto& worldMatrix = glm::mat4(1.0f);
-
-        Render(*m_terrainMaterial, *m_terrainMesh, worldMatrix);
-        Render(*m_grassMaterial, *m_grassMesh, worldMatrix);
+        GrassRenderer::Render();
     }
 
-private:
 
-    void Render(const Material& material, const Mesh& mesh, const glm::mat4& worldMatrix) const {
-        const auto& shaderProgram = *material.GetShaderProgram();
-
-        material.Use();
-
-        const auto locationWorldMatrix = shaderProgram.GetUniformLocation("WorldMatrix");
-        const auto locationViewProjMatrix = shaderProgram.GetUniformLocation("ViewProjMatrix");
-
-        material.GetShaderProgram()->SetUniform(locationWorldMatrix, worldMatrix);
-        material.GetShaderProgram()->SetUniform(locationViewProjMatrix, m_camera.GetViewProjectionMatrix());
-
-        mesh.DrawSubmesh(0);
-    }
 
 };

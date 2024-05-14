@@ -114,16 +114,13 @@ public:
 
     [[nodiscard]] unsigned int GetSubmeshCount() const { return static_cast<unsigned int>(m_submeshes.size()); }
     [[nodiscard]] const VertexArrayObject& GetSubmeshVertexArray(const unsigned int submeshIndex) const { return m_vaos[m_submeshes[submeshIndex].vaoIndex]; }
+    [[nodiscard]] Drawcall& GetSubmeshDrawcall(const unsigned int submeshIndex) { return m_submeshes[submeshIndex].drawcall; }
     [[nodiscard]] const Drawcall& GetSubmeshDrawcall(const unsigned int submeshIndex) const { return m_submeshes[submeshIndex].drawcall; }
 
     void AddDrawIndirectBuffer(int submeshIndex, const IndexedBufferObject& buffer) const;
 
     // Draws a submesh
     void DrawSubmesh(int submeshIndex) const;
-
-    void DrawSubmesh(int submeshIndex, unsigned int instances) const;
-
-    void DrawIndirect(int submeshIndex) const;
 
 private:
 
