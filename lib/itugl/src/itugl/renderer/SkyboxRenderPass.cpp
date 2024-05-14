@@ -13,8 +13,8 @@ SkyboxRenderPass::SkyboxRenderPass(std::shared_ptr<TextureCubemapObject> texture
     , m_skyboxTextureLocation(-1)
 {
     // Load shaders and build shader program
-    Shader vertexShader = ShaderLoader(Shader::VertexShader).Load("shaders/renderer/skybox.vert");
-    Shader fragmentShader = ShaderLoader(Shader::FragmentShader).Load("shaders/renderer/skybox.frag");
+    Shader vertexShader = ShaderLoader(Shader::VertexShader).Load("shaders/renderer/skybox/skybox.vert");
+    Shader fragmentShader = ShaderLoader(Shader::FragmentShader).Load("shaders/renderer/skybox/skybox.frag");
     m_shaderProgram.Build(vertexShader, fragmentShader);
 
     // Get uniform locations

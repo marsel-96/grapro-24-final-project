@@ -6,6 +6,7 @@ module;
 #include "ituGL/shader/ShaderUniformCollection.h"
 #include "ituGL/asset/ShaderLoader.h"
 #include "itugl/asset/Texture2DLoader.h"
+#include "itugl/asset/TextureCubemapLoader.h"
 #include "itugl/buffer/AtomicCounterBufferObject.h"
 #include "itugl/buffer/SharedStorageBufferObject.h"
 #include "itugl/camera/Camera.h"
@@ -15,6 +16,7 @@ module;
 #include "itugl/lighting/PointLight.h"
 #include "itugl/renderer/ForwardRenderPass.h"
 #include "itugl/renderer/Renderer.h"
+#include "itugl/renderer/SkyboxRenderPass.h"
 #include "itugl/scene/SceneModel.h"
 #include "ituGL/shader/Material.h"
 
@@ -34,6 +36,8 @@ export class GrassComputeShader final : public GrassRenderer {
     std::shared_ptr<Texture2DObject> m_terrainHeightMap;
     std::shared_ptr<Texture2DObject> m_terrainTexture;
     std::shared_ptr<Texture2DObject> m_grassBladeHeightMap;
+
+    std::shared_ptr<TextureCubemapObject> m_skyboxTexture;
 
     float m_heightMapSize = 512;
     float m_heightMultiplier = 18.0f;
@@ -78,16 +82,21 @@ private:
     }
 
     void InitTextures() { // NOLINT(*-convert-member-functions-to-static)
+        auto loaderRGBToRGB8 = Texture2DLoader(TextureObject::FormatRGB, TextureObject::InternalFormatRGB8);
+        auto loaderRoR8 = Texture2DLoader(TextureObject::FormatR, TextureObject::InternalFormatR8);
+
         {
-            auto loader = Texture2DLoader(TextureObject::FormatRGB, TextureObject::InternalFormatRGB8);
+            m_skyboxTexture = TextureCubemapLoader::LoadTextureShared("assets/skybox/autumn_field.hdr", TextureObject::FormatRGB, TextureObject::InternalFormatRGB16F);
+        }
+        {
             m_terrainTexture = std::make_unique<Texture2DObject>(
-                loader.Load("assets/textures/dirt.png")
+                loaderRGBToRGB8.Load("assets/textures/dirt.png")
             );
         }
         {
             auto loader = Texture2DLoader(TextureObject::FormatR, TextureObject::InternalFormatR8);
             m_terrainHeightMap = std::make_unique<Texture2DObject>(
-                loader.Load("assets/textures/grass_compute_shader/heightmap.png")
+                loaderRoR8.Load("assets/textures/grass_compute_shader/heightmap.png")
             );
             m_terrainHeightMap->Bind();
             m_terrainHeightMap->SetParameter(TextureObject::ParameterEnum::WrapS, GL_CLAMP_TO_EDGE);
@@ -95,14 +104,18 @@ private:
             m_terrainHeightMap->Unbind();
         }
         {
-            auto loader = Texture2DLoader(TextureObject::FormatR, TextureObject::InternalFormatR8);
             m_grassBladeHeightMap = std::make_unique<Texture2DObject>(
-                loader.Load("assets/textures/grass_compute_shader/grass_height.png")
+                loaderRoR8.Load("assets/textures/grass_compute_shader/grass_height.png")
             );
             m_grassBladeHeightMap->Bind();
             m_grassBladeHeightMap->SetParameter(TextureObject::ParameterEnum::WrapS, GL_CLAMP_TO_EDGE);
             m_grassBladeHeightMap->SetParameter(TextureObject::ParameterEnum::WrapT, GL_CLAMP_TO_EDGE);
             m_grassBladeHeightMap->Unbind();
+        }
+        {
+            m_windTexture = std::make_unique<Texture2DObject>(
+                loaderRoR8.Load("assets/textures/grass_compute_shader/wind.png")
+            );
         }
 
         {
@@ -242,6 +255,7 @@ private:
 
     void InitRenderer() {
         m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
+        m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
     }
 
 public:
@@ -256,8 +270,6 @@ public:
         );
 
         InitLights();
-        InitRenderer();
-
         InitGrassMesh();
         InitTextures();
 
@@ -265,6 +277,8 @@ public:
         InitGrassCompute();
         InitGrassInstantiatorCompute();
         InitGrassShader();
+
+        InitRenderer();
     }
 
     void Update() override {

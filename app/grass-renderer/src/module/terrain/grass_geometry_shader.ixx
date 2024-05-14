@@ -6,7 +6,7 @@ module;
 #include "itugl/application/Window.h"
 #include "itugl/asset/ModelLoader.h"
 #include "ituGL/shader/ShaderUniformCollection.h"
-
+#include "itugl/asset/TextureCubemapLoader.h"
 #include "ituGL/asset/ShaderLoader.h"
 #include "itugl/asset/Texture2DLoader.h"
 #include "itugl/geometry/Mesh.h"
@@ -15,6 +15,8 @@ module;
 #include "itugl/renderer/ForwardRenderPass.h"
 #include "itugl/scene/SceneModel.h"
 #include "ituGL/shader/Material.h"
+#include "itugl/texture/TextureCubemapObject.h"
+#include "itugl/renderer/SkyboxRenderPass.h"
 
 export module terrain.grass_geometry_shader;
 
@@ -116,6 +118,7 @@ export class GrassGeometryShader final: public GrassRenderer  {
 
     std::shared_ptr<Texture2DObject> m_grassWindDistorsionMap;
     std::shared_ptr<Texture2DObject> m_terrainTexture;
+    std::shared_ptr<TextureCubemapObject> m_skyboxTexture;
 
     std::shared_ptr<Mesh> m_grassMesh;
     std::shared_ptr<Mesh> m_terrainMesh;
@@ -142,6 +145,12 @@ public:
 private:
 
     void InitTextures() {
+        auto loaderRGBToRGB8 = Texture2DLoader(TextureObject::FormatRGB, TextureObject::InternalFormatRGB8);
+        auto loaderRoR8 = Texture2DLoader(TextureObject::FormatR, TextureObject::InternalFormatR8);
+
+        {
+            m_skyboxTexture = TextureCubemapLoader::LoadTextureShared("assets/skybox/autumn_field.hdr", TextureObject::FormatRGB, TextureObject::InternalFormatRGB16F);
+        }
         {
             auto loader = Texture2DLoader(TextureObject::FormatRGB, TextureObject::InternalFormatRGB8);
             m_terrainTexture = std::make_unique<Texture2DObject>(
@@ -223,6 +232,7 @@ private:
 
     void InitRenderer() {
         m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
+        m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
     }
 
 public:
@@ -230,7 +240,6 @@ public:
     void Initialize() override {
         GrassRenderer::Initialize();
 
-        InitRenderer();
         InitCamera(
             glm::vec3(-20, 70, 20),
             glm::vec3(0, 0, 0),
@@ -240,6 +249,7 @@ public:
         InitTextures();
         InitGrassShader();
         InitTerrainShader();
+        InitRenderer();
     }
 
     void Update() override {
