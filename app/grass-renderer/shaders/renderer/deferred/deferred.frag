@@ -1,6 +1,8 @@
-#include "lighting/utils.glsl"
-#include "lighting/lighting.glsl"
-#include "lighting/blinn-phong.glsl"
+#version 450 core
+
+#include "../lighting/utils.glsl"
+#include "../lighting/lighting.glsl"
+#include "../lighting/blinn-phong.glsl"
 
 //Inputs
 in vec2 TexCoord;

@@ -13,9 +13,13 @@ in VS_OUT {
 uniform vec4 Color;
 uniform vec4 BottomColor;
 uniform vec4 TopColor;
-
 uniform float ShadingParameter;
 uniform float ShadingOffset;
+
+uniform float AmbientReflectance;
+uniform float DiffuseReflectance;
+uniform float SpecularReflectance;
+uniform float SpecularExponent;
 
 out vec4 FragColor;
 

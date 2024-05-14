@@ -1,5 +1,6 @@
 #include "ituGl/utils/ShaderIncludeReplacer.h"
 
+#include <filesystem>
 #include <set>
 
 constexpr std::string_view INCLUDE_IDENTIFIER = "#include";
@@ -33,13 +34,14 @@ std::string ShaderIncludeReplacer::LoadShaderWithIncludes(const std::string &pat
             lineBuffer.erase(0, OFFSET_INCLUDE);
             lineBuffer.pop_back();
 
-            if (!data.includes.contains(lineBuffer)) {
+            lineBuffer.insert(0, GetFilePath(path));
 
-                data.includes.insert(lineBuffer);
+            if (const auto canonical = std::filesystem::canonical(lineBuffer).string(); !data.includes.contains(canonical)) {
+
+                data.includes.insert(canonical);
                 data.depth++;
 
-                lineBuffer.insert(0, GetFilePath(path));
-                code += LoadShaderWithIncludes(lineBuffer, data);
+                code += LoadShaderWithIncludes(canonical, data);
             }
 
             continue;

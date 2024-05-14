@@ -14,11 +14,15 @@ module;
 #include "itugl/compute/Compute.h"
 #include "itugl/geometry/Mesh.h"
 #include "itugl/lighting/PointLight.h"
+#include "itugl/renderer/DeferredRenderPass.h"
 #include "itugl/renderer/ForwardRenderPass.h"
+#include "itugl/renderer/GBufferRenderPass.h"
 #include "itugl/renderer/Renderer.h"
 #include "itugl/renderer/SkyboxRenderPass.h"
 #include "itugl/scene/SceneModel.h"
 #include "ituGL/shader/Material.h"
+
+
 
 export module terrain.grass_compute_shader;
 
@@ -38,6 +42,10 @@ export class GrassComputeShader final : public GrassRenderer {
     std::shared_ptr<Texture2DObject> m_grassBladeHeightMap;
 
     std::shared_ptr<TextureCubemapObject> m_skyboxTexture;
+    std::shared_ptr<Material> m_deferredMaterial;
+    std::shared_ptr<Material> m_gBufferMaterial;
+
+    glm::vec3 m_ambientColor = glm::vec3(0.25f);
 
     float m_heightMapSize = 512;
     float m_heightMultiplier = 18.0f;
@@ -253,9 +261,144 @@ private:
         m_scene.AddSceneNode(std::make_shared<SceneModel>("terrain", terrain));
     }
 
+    void InitDeferredMaterials() {
+        // G-buffer material
+        {
+            // Load and build shader
+            const auto vertexShader = m_vertexShaderLoader.Load("shaders/renderer/deferred/gbuffer.vert");
+            const auto fragmentShader = m_fragmentShaderLoader.Load("shaders/renderer/deferred/gbuffer.frag");
+
+            const auto shaderProgram = std::make_shared<ShaderProgram>();
+            shaderProgram->Build(vertexShader, fragmentShader);
+
+            // Get transform related uniform locations
+            const auto worldViewMatrixLocation = shaderProgram->GetUniformLocation("WorldViewMatrix");
+            const auto worldViewProjMatrixLocation = shaderProgram->GetUniformLocation("WorldViewProjMatrix");
+
+            // Register shader with renderer
+            m_renderer.RegisterShaderProgram(shaderProgram,
+                [=](
+                    const ShaderProgram &_shaderProgram,
+                    const glm::mat4 &worldMatrix,
+                    const Camera &camera,
+                    bool cameraChanged) {
+                    _shaderProgram.SetUniform(worldViewMatrixLocation, camera.GetViewMatrix() * worldMatrix);
+                    _shaderProgram.SetUniform(worldViewProjMatrixLocation, camera.GetViewProjectionMatrix() * worldMatrix);
+                }, nullptr
+            );
+
+            // Filter out uniforms that are not material properties
+            ShaderUniformCollection::NameSet filteredUniforms;
+
+            filteredUniforms.insert("WorldViewMatrix");
+            filteredUniforms.insert("WorldViewProjMatrix");
+
+            // Create material
+            m_gBufferMaterial = std::make_shared<Material>(shaderProgram, filteredUniforms);
+        }
+
+        // Deferred material
+        {
+            const auto vertexShader = ShaderLoader(Shader::VertexShader).Load("shaders/renderer/deferred/deferred.vert");
+            const auto fragmentShader = ShaderLoader(Shader::FragmentShader).Load("shaders/renderer/deferred/deferred.frag");
+
+            const auto shaderProgram = std::make_shared<ShaderProgram>();
+            shaderProgram->Build(vertexShader, fragmentShader);
+
+            // Filter out uniforms that are not material properties
+            ShaderUniformCollection::NameSet filteredUniforms;
+            filteredUniforms.insert("InvProjMatrix");
+            filteredUniforms.insert("WorldViewProjMatrix");
+
+            // Get transform related uniform locations
+            const auto invViewMatrixLocation = shaderProgram->GetUniformLocation("InvViewMatrix");
+            const auto invProjMatrixLocation = shaderProgram->GetUniformLocation("InvProjMatrix");
+            const auto worldViewProjMatrixLocation = shaderProgram->GetUniformLocation("WorldViewProjMatrix");
+
+            // Register shader with renderer
+            m_renderer.RegisterShaderProgram(shaderProgram,
+            [=](
+                const ShaderProgram &_shaderProgram,
+                const glm::mat4 &worldMatrix,
+                const Camera &camera,
+                bool cameraChanged
+                ) {
+                    if (cameraChanged) {
+                        _shaderProgram.SetUniform(invViewMatrixLocation, inverse(camera.GetViewMatrix()));
+                        _shaderProgram.SetUniform(invProjMatrixLocation, inverse(camera.GetProjectionMatrix()));
+                    }
+                    _shaderProgram.SetUniform(worldViewProjMatrixLocation, camera.GetViewProjectionMatrix() * worldMatrix);
+                }, GetUpdateLightsFunction(shaderProgram)
+            );
+
+            // Create material
+            m_deferredMaterial = std::make_shared<Material>(shaderProgram, filteredUniforms);
+        }
+    }
+
+    [[nodiscard]] auto GetUpdateLightsFunction(const std::shared_ptr<ShaderProgram>& shaderProgram) const
+    {
+        // Get lighting related uniform locations
+        const auto ambientColorLocation = shaderProgram->GetUniformLocation("AmbientColor");
+        const auto lightColorLocation = shaderProgram->GetUniformLocation("LightColor");
+        const auto lightPositionLocation = shaderProgram->GetUniformLocation("LightPosition");
+        const auto lightDirectionLocation = shaderProgram->GetUniformLocation("LightDirection");
+        const auto lightAttenuationLocation = shaderProgram->GetUniformLocation("LightAttenuation");
+
+        return [=](const ShaderProgram& _shaderProgram, std::span<const Light* const> lights, unsigned int& lightIndex) -> bool
+        {
+            bool needsRender = false;
+
+            if (lightIndex == 0)
+            {
+                _shaderProgram.SetUniform(ambientColorLocation, m_ambientColor);
+                needsRender = true;
+            }
+            else
+            {
+                _shaderProgram.SetUniform(ambientColorLocation, glm::vec3(0));
+            }
+
+            if (lightIndex < lights.size())
+            {
+                const Light& light = *lights[lightIndex];
+                _shaderProgram.SetUniform(lightColorLocation, light.GetColor() * light.GetIntensity());
+                _shaderProgram.SetUniform(lightPositionLocation, light.GetPosition());
+                _shaderProgram.SetUniform(lightDirectionLocation, light.GetDirection());
+                _shaderProgram.SetUniform(lightAttenuationLocation, light.GetAttenuation());
+                needsRender = true;
+            }
+            else
+            {
+                // Disable light
+                _shaderProgram.SetUniform(lightColorLocation, glm::vec3(0.0f));
+            }
+
+            lightIndex++;
+
+            return needsRender;
+        };
+    }
+
     void InitRenderer() {
-        m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
         m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
+        m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
+        // {
+        //     // Set up deferred passes
+        //     int width, height;
+        //     GetMainWindow().GetDimensions(width, height);
+        //     auto gbufferRenderPass(std::make_unique<GBufferRenderPass>(width, height));
+        //
+        //     // Set the g-buffer textures as properties of the deferred material
+        //     m_deferredMaterial->SetUniformValue("DepthTexture", gbufferRenderPass->GetDepthTexture());
+        //     m_deferredMaterial->SetUniformValue("AlbedoTexture", gbufferRenderPass->GetAlbedoTexture());
+        //     m_deferredMaterial->SetUniformValue("NormalTexture", gbufferRenderPass->GetNormalTexture());
+        //     m_deferredMaterial->SetUniformValue("OthersTexture", gbufferRenderPass->GetOthersTexture());
+        //
+        //     // Add the render passes
+        //     m_renderer.AddRenderPass(std::move(gbufferRenderPass));
+        //     m_renderer.AddRenderPass(std::make_unique<DeferredRenderPass>(m_deferredMaterial));
+        // }
     }
 
 public:
@@ -273,6 +416,7 @@ public:
         InitGrassMesh();
         InitTextures();
 
+        // InitDeferredMaterials();
         InitTerrainShader();
         InitGrassCompute();
         InitGrassInstantiatorCompute();
