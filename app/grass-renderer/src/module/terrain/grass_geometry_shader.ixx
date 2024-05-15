@@ -21,7 +21,6 @@ module;
 
 export module terrain.grass_geometry_shader;
 
-import app.util.texture;
 import app.util.mesh;
 import app.grass_renderer_common;
 

@@ -19,9 +19,6 @@ module;
 
 export module app.grass_renderer_common;
 
-import app.camera;
-import app.ui;
-
 export class GrassRenderer : public Application {
 
 protected:
@@ -37,8 +34,6 @@ protected:
     DearImGui m_imGui;
     CameraController m_cameraController;
     Scene m_scene;
-
-    // UIManager m_ui;
 
     std::shared_ptr<Camera> m_camera;
 
@@ -129,7 +124,6 @@ protected:
     void InitGUI() {
         auto& window = GetMainWindow();
         m_imGui.Initialize(window);
-        // m_ui.Initialize(window);
     }
 
     void Initialize() override {
@@ -178,7 +172,6 @@ protected:
     }
 
     void Cleanup() override {
-        // m_ui.Clean();
         m_imGui.Cleanup();
 
         Application::Cleanup();
