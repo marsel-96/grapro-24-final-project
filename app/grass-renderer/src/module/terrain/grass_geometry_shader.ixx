@@ -17,6 +17,7 @@ module;
 #include "ituGL/shader/Material.h"
 #include "itugl/texture/TextureCubemapObject.h"
 #include "itugl/renderer/SkyboxRenderPass.h"
+#include "itugl/scene/ImGuiSceneVisitor.h"
 
 export module terrain.grass_geometry_shader;
 
@@ -258,6 +259,98 @@ public:
 
     void Render() override {
         GrassRenderer::Render();
+    }
+
+    void RenderGUI() override {
+        m_imGui.BeginFrame();
+
+        // Draw GUI for scene nodes, using the visitor pattern
+        ImGuiSceneVisitor imGuiVisitor(m_imGui, "Scene");
+        m_scene.AcceptVisitor(imGuiVisitor);
+
+        // Draw GUI for camera controller
+        m_cameraController.DrawGUI(m_imGui);
+
+        if (auto window = m_imGui.UseWindow("Grass Controls"))
+        {
+            if (m_grassMaterial)
+            {
+                ImGui::Separator();
+                ImGui::Text("Tassellation Properties");
+
+                if (ImGui::DragFloat4("Tessellation Level Outer", &m_tassellationLevelOuter[0], 1.0f, 0.00f, 32.0f))
+                {
+                    m_grassMaterial->SetUniformValue("TessellationLevelOuter", m_tassellationLevelOuter);
+                }
+                if (ImGui::DragFloat2("Tessellation Level Inner", &m_tassellationLevelInner[0], 1.0f, 0.00f, 32.0f))
+                {
+                    m_grassMaterial->SetUniformValue("TessellationLevelInner", m_tassellationLevelInner);
+                }
+
+                ImGui::Separator();
+                ImGui::Text("Grass Placement Properties");
+
+                if (ImGui::DragFloat("Grass Blade Width", &m_bladeWidth, 0.01f, 0.00f, 2.0f))
+                {
+                    m_grassMaterial->SetUniformValue("BladeWidth", m_bladeWidth);
+                }
+                if (ImGui::DragFloat("Grass Blade Width Offset", &m_bladeWidthRandom, 0.01f, 0.00f, 1.0f))
+                {
+                    m_grassMaterial->SetUniformValue("BladeWidthRandom", m_bladeWidthRandom);
+                }
+                if (ImGui::DragFloat("Grass Blade Height", &m_bladeHeight, 0.1f, 0.01f, 10.0f))
+                {
+                    m_grassMaterial->SetUniformValue("BladeHeight", m_bladeHeight);
+                }
+                if (ImGui::DragFloat("Grass Blade Height Offset", &m_bladeHeightRandom, 0.05f, 0.00f, 5.0f))
+                {
+                    m_grassMaterial->SetUniformValue("BladeHeightRandom", m_bladeHeightRandom);
+                }
+                if (ImGui::DragFloat("Grass Bend Rotation", &m_bendRotation, 0.01f, 0.00f, 10.0f))
+                {
+                    m_grassMaterial->SetUniformValue("BendRotation", m_bendRotation);
+                }
+                if (ImGui::DragFloat("Grass Blade Forward", &m_bladeForward, 0.01f, 0.00f, 10.0f))
+                {
+                    m_grassMaterial->SetUniformValue("BladeForward", m_bladeForward);
+                }
+                if (ImGui::DragFloat("Grass Blade Curvature", &m_bladeCurvature, 0.01f, 0.00f, 10.0f))
+                {
+                    m_grassMaterial->SetUniformValue("BladeCurvature", m_bladeCurvature);
+                }
+
+                ImGui::Separator();
+                ImGui::Text("Wind Properties (TBD)");
+
+                if (ImGui::DragFloat("Wind Strength", &m_windStrength, 0.01f, 0.00f, 10.0f))
+                {
+                    m_grassMaterial->SetUniformValue("WindStrength", m_windStrength);
+                }
+                if (ImGui::DragFloat2("Wind Frequency", &m_windFrequency[0], 1.0f, 0.00f, 32.0f))
+                {
+                    m_grassMaterial->SetUniformValue("WindFrequency", m_windFrequency);
+                }
+
+                ImGui::Text("Grass Color & Light Properties");
+                ImGui::Separator();
+
+                if (ImGui::ColorEdit3("Color", &m_color[0]))
+                {
+                    m_grassMaterial->SetUniformValue("Color", m_color);
+                }
+                if (ImGui::ColorEdit3("Bottom Color", &m_bottomColor[0]))
+                {
+                    m_grassMaterial->SetUniformValue("BottomColor", m_bottomColor);
+                }
+                if (ImGui::ColorEdit3("Top Color", &m_topColor[0]))
+                {
+                    m_grassMaterial->SetUniformValue("TopColor", m_topColor);
+                }
+
+            }
+        }
+
+        m_imGui.EndFrame();
     }
 
 

@@ -89,8 +89,9 @@ protected:
     void InitLights() { // NOLINT(*-convert-member-functions-to-static)
         // Create a directional light and add it to the scene
         auto directionalLight = std::make_shared<DirectionalLight>();
+        directionalLight->SetPosition(glm::vec3(-20, 70, 20));
         directionalLight->SetDirection(glm::vec3(-0.3f, -1.0f, -0.3f)); // It will be normalized inside the function
-        directionalLight->SetIntensity(3.0f);
+        directionalLight->SetIntensity(0.2f);
         m_scene.AddSceneNode(std::make_shared<SceneLight>("directional light", directionalLight));
 
         // Create a point light and add it to the scene
@@ -162,7 +163,7 @@ protected:
         RenderGUI();
     }
 
-    void RenderGUI() {
+    virtual void RenderGUI() {
         m_imGui.BeginFrame();
 
         // Draw GUI for scene nodes, using the visitor pattern
@@ -171,6 +172,7 @@ protected:
 
         // Draw GUI for camera controller
         m_cameraController.DrawGUI(m_imGui);
+
 
         m_imGui.EndFrame();
     }

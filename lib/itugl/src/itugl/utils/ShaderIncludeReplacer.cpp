@@ -34,8 +34,9 @@ std::string ShaderIncludeReplacer::LoadShaderWithIncludes(const std::string &pat
             lineBuffer.erase(0, OFFSET_INCLUDE);
             lineBuffer.pop_back();
 
-            lineBuffer.insert(0, GetFilePath(path));
-
+            if (!lineBuffer.starts_with("shaders/")) {
+                lineBuffer.insert(0, GetFilePath(path));
+            }
             if (const auto canonical = std::filesystem::canonical(lineBuffer).string(); !data.includes.contains(canonical)) {
 
                 data.includes.insert(canonical);

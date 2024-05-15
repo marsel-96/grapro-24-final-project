@@ -14,15 +14,12 @@ module;
 #include "itugl/compute/Compute.h"
 #include "itugl/geometry/Mesh.h"
 #include "itugl/lighting/PointLight.h"
-#include "itugl/renderer/DeferredRenderPass.h"
 #include "itugl/renderer/ForwardRenderPass.h"
-#include "itugl/renderer/GBufferRenderPass.h"
 #include "itugl/renderer/Renderer.h"
 #include "itugl/renderer/SkyboxRenderPass.h"
+#include "itugl/scene/ImGuiSceneVisitor.h"
 #include "itugl/scene/SceneModel.h"
 #include "ituGL/shader/Material.h"
-
-
 
 export module terrain.grass_compute_shader;
 
@@ -45,22 +42,37 @@ export class GrassComputeShader final : public GrassRenderer {
     std::shared_ptr<Material> m_deferredMaterial;
     std::shared_ptr<Material> m_gBufferMaterial;
 
-    glm::vec3 m_ambientColor = glm::vec3(0.25f);
-
     float m_heightMapSize = 512;
     float m_heightMultiplier = 18.0f;
 
     float m_grassBladeMapsSize = 512.0f;
     float m_grassBladeHeightMin = 0.15f;
-    float m_grassBladeHeightMax = 5.0f;
+    float m_grassBladeHeightMax = 4.0f;
+    float m_grassBladeHeightMultiplier = 6.0f;
     float m_grassBladeHeightJitter = 0.15f;
-
+    float m_grassBaseWidth = .010;
+    float m_grassWidthOffset = 0.110f;
+    float m_grassBaseSideCurve = 0.5;
+    float m_grassSideCurveOffset = 0.28f;
+    float m_grassBaseBend = 0.39;
+    float m_grassBendOffset = 0.32f;
     float m_jitterStrength = 2.0f;
+    float m_windSpeed = 1.0f;
 
     int m_patchWidth = 128;
     int m_patchHeight = 128;
 
-    unsigned int m_resolution = 768;
+    glm::vec3 m_color = glm::vec3(1.0f);
+    glm::vec3 m_bottomColor = glm::vec3(0.06f, 0.38f, 0.07f);
+    glm::vec3 m_topColor = glm::vec3(0.51f, 0.549f, 0.229f);
+    float m_ambientReflectance = 1.2f;
+    float m_diffuseReflectance = 2.0f;
+    float m_specularReflectance = 0.82f;
+    float m_specularExponent = 100.0f;
+    glm::vec3 m_ambientColor = glm::vec3(0.55);
+    glm::vec2 m_windDirection = glm::vec2(0.5, 0.5);
+
+    unsigned int m_resolution = 512;
 
     std::shared_ptr<Model> m_grassModel;
 
@@ -134,6 +146,15 @@ private:
         }
     }
 
+    void InitSSBOBuffer() {
+        m_grassBladeSSBO = std::make_shared<SharedStorageBufferObject>();
+
+        m_grassBladeSSBO->Bind();
+        m_grassBladeSSBO->AllocateData<float[16]>(m_resolution * m_resolution);
+        m_grassBladeSSBO->Unbind();
+        m_grassCompute->AddBufferBinding(m_grassBladeSSBO, 0);
+    }
+
     void InitGrassCompute() {
         const auto cs = m_computeShaderLoader.Load("shaders/grass_compute_shader/grass/grass.comp");
         auto shaderProgram = std::make_shared<ShaderProgram>();
@@ -152,11 +173,7 @@ private:
         m_atomicCounterBuffer->AllocateData<unsigned int>(reset, DynamicDraw);
         m_atomicCounterBuffer->Unbind();
 
-        m_grassBladeSSBO = std::make_shared<SharedStorageBufferObject>();
-
-        m_grassBladeSSBO->Bind();
-        m_grassBladeSSBO->AllocateData<float[16]>(m_resolution * m_resolution);
-        m_grassBladeSSBO->Unbind();
+        InitSSBOBuffer();
 
         m_grassCompute->SetUniformValue("Resolution", m_resolution);
         m_grassCompute->SetUniformValue("GrassSpacing", m_patchWidth / static_cast<float>(m_resolution));
@@ -165,6 +182,7 @@ private:
         m_grassCompute->SetUniformValue("GrassBladeHeightMap", m_grassBladeHeightMap);
         m_grassCompute->SetUniformValue("GrassBladeHeightMin", m_grassBladeHeightMin);
         m_grassCompute->SetUniformValue("GrassBladeHeightMax", m_grassBladeHeightMax);
+        m_grassCompute->SetUniformValue("GrassBladeHeightMultiplier", m_grassBladeHeightMultiplier);
         m_grassCompute->SetUniformValue("GrassBladeTypeMap", m_grassBladeHeightMap);
         m_grassCompute->SetUniformValue("JitterStrength", m_jitterStrength);
         m_grassCompute->SetUniformValue("ViewProjectionMatrix", m_camera->GetViewProjectionMatrix());
@@ -174,8 +192,13 @@ private:
         m_grassCompute->SetUniformValue("HeightMultiplier", m_heightMultiplier);
         m_grassCompute->SetUniformValue("TerrainSize", glm::vec2(m_patchWidth, m_patchHeight));
         m_grassCompute->SetUniformValue("GrassBladeHeightJitter", m_grassBladeHeightJitter);
+        m_grassCompute->SetUniformValue("GrassWidthOffset", m_grassWidthOffset);
+        m_grassCompute->SetUniformValue("GrassSideCurveOffset", m_grassSideCurveOffset);
+        m_grassCompute->SetUniformValue("GrassBaseBend", m_grassBaseBend);
+        m_grassCompute->SetUniformValue("GrassBendOffset", m_grassBendOffset);
+        m_grassCompute->SetUniformValue("GrassBaseWidth", m_grassBaseWidth);
+        m_grassCompute->SetUniformValue("GrassBaseSideCurve", m_grassBaseSideCurve);
 
-        m_grassCompute->AddBufferBinding(m_grassBladeSSBO, 0);
         m_grassCompute->AddBufferBinding(m_atomicCounterBuffer, 0);
     }
 
@@ -205,20 +228,17 @@ private:
 
         // // Terrain materials
         m_grassMaterial = std::make_unique<Material>(grassShaderProgram);
-        m_grassMaterial->SetUniformValue("Color", glm::vec4(1.0f));
-        m_grassMaterial->SetUniformValue("BottomColor", glm::vec4(0.06f, 0.38f, 0.07f, 1.0f));
-        m_grassMaterial->SetUniformValue("TopColor", glm::vec4(0.56f, 0.83f, 0.32f, 1.0f));
-        m_grassMaterial->SetUniformValue("Offset", 0.4f);
-        m_grassMaterial->SetUniformValue("Height", 0.4f);
-        m_grassMaterial->SetUniformValue("WindDirection", glm::vec2(0.5, 0.5));
-        m_grassMaterial->SetUniformValue("Time", 0.0f);
-        m_grassMaterial->SetUniformValue("WindNoiseScale", 1.0f);
-        m_grassMaterial->SetUniformValue("NoiseOffset", -0.5f);
-        m_grassMaterial->SetUniformValue("MeshDeformationLimitTop", 0.08f);
-        m_grassMaterial->SetUniformValue("MeshDeformationLimitLow", 2.0f);
-        m_grassMaterial->SetUniformValue("WindSpeed", 2.0f);
-        m_grassMaterial->SetUniformValue("ShadingOffset", 2.0f);
-        m_grassMaterial->SetUniformValue("ShadingParameter", 1.7f);
+        m_grassMaterial->SetUniformValue("Color", m_color);
+        m_grassMaterial->SetUniformValue("BottomColor", m_bottomColor);
+        m_grassMaterial->SetUniformValue("TopColor", m_topColor);
+        m_grassMaterial->SetUniformValue("AmbientReflectance", m_ambientReflectance);
+        m_grassMaterial->SetUniformValue("DiffuseReflectance", m_diffuseReflectance);
+        m_grassMaterial->SetUniformValue("SpecularReflectance", m_specularReflectance);
+        m_grassMaterial->SetUniformValue("SpecularExponent", m_specularExponent);
+        m_grassMaterial->SetUniformValue("AmbientColor", m_ambientColor);
+        m_grassMaterial->SetUniformValue("WindDirection", m_windDirection);
+        m_grassMaterial->SetUniformValue("WindSpeed", m_windSpeed);
+
 
         AddStandardLightUniform(grassShaderProgram);
 
@@ -383,22 +403,6 @@ private:
     void InitRenderer() {
         m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
         m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
-        // {
-        //     // Set up deferred passes
-        //     int width, height;
-        //     GetMainWindow().GetDimensions(width, height);
-        //     auto gbufferRenderPass(std::make_unique<GBufferRenderPass>(width, height));
-        //
-        //     // Set the g-buffer textures as properties of the deferred material
-        //     m_deferredMaterial->SetUniformValue("DepthTexture", gbufferRenderPass->GetDepthTexture());
-        //     m_deferredMaterial->SetUniformValue("AlbedoTexture", gbufferRenderPass->GetAlbedoTexture());
-        //     m_deferredMaterial->SetUniformValue("NormalTexture", gbufferRenderPass->GetNormalTexture());
-        //     m_deferredMaterial->SetUniformValue("OthersTexture", gbufferRenderPass->GetOthersTexture());
-        //
-        //     // Add the render passes
-        //     m_renderer.AddRenderPass(std::move(gbufferRenderPass));
-        //     m_renderer.AddRenderPass(std::make_unique<DeferredRenderPass>(m_deferredMaterial));
-        // }
     }
 
 public:
@@ -438,6 +442,132 @@ public:
         m_grassBladeSSBO->BindToIndex(0);
 
         GrassRenderer::Render();
+    }
+
+    void RenderGUI() override{
+        m_imGui.BeginFrame();
+
+        // Draw GUI for scene nodes, using the visitor pattern
+        ImGuiSceneVisitor imGuiVisitor(m_imGui, "Scene");
+        m_scene.AcceptVisitor(imGuiVisitor);
+
+        // Draw GUI for camera controller
+        m_cameraController.DrawGUI(m_imGui);
+
+        if (auto window = m_imGui.UseWindow("Grass Controls"))
+        {
+            if (m_grassMaterial)
+            {
+                ImGui::Separator();
+                ImGui::Text("Grass Placement Properties");
+
+                constexpr unsigned int min = 32, max = 2048;
+                if (ImGui::DragScalar("Resolution", ImGuiDataType_U32, &m_resolution, 16u, &min, &max)) {
+                    m_grassCompute->SetUniformValue("Resolution", m_resolution);
+                    m_grassCompute->SetUniformValue("GrassSpacing", m_patchWidth / static_cast<float>(m_resolution));
+                    m_grassCompute->ChangeWorkGroupSize(glm::uvec3(m_resolution / 32, m_resolution / 32, 1));
+                    InitSSBOBuffer();
+                }
+                if (ImGui::DragFloat("Grass Blade Height Multiplier", &m_grassBladeHeightMultiplier, 0.1f, 0.00f, 15.0f)) {
+                    m_grassCompute->SetUniformValue("GrassBladeHeightMultiplier", m_grassBladeHeightMultiplier);
+                }
+                if (ImGui::DragFloat("Grass Blade Height Min", &m_grassBladeHeightMin, 0.01f, 0.00f, 1.0f))
+                {
+                    m_grassCompute->SetUniformValue("GrassBladeHeightMin", m_grassBladeHeightMin);
+                }
+                if (ImGui::DragFloat("Grass Blade Height Max", &m_grassBladeHeightMax, 0.1f, 0.00f, 15.0f))
+                {
+                    m_grassCompute->SetUniformValue("GrassBladeHeightMax", m_grassBladeHeightMax);
+                }
+                if (ImGui::DragFloat("Grass Blade Height Jitter", &m_grassBladeHeightJitter, 0.01f, 0.0f, 0.5f))
+                {
+                    m_grassCompute->SetUniformValue("GrassBladeHeightJitter", m_grassBladeHeightJitter);
+                }
+                if (ImGui::DragFloat("Grass Blade Base Width", &m_grassBaseWidth, 0.01f, 0.0f, 1.0f))
+                {
+                    m_grassCompute->SetUniformValue("GrassBaseWidth", m_grassBaseWidth);
+                }
+                if (ImGui::DragFloat("Grass Blade Width Offset", &m_grassWidthOffset, 0.01f, 0.0f, 0.5f))
+                {
+                    m_grassCompute->SetUniformValue("GrassWidthOffset", m_grassWidthOffset);
+                }
+                if (ImGui::DragFloat("Grass Blade Base Side Curve", &m_grassBaseSideCurve, 0.01f, 0.0f, 1.0f))
+                {
+                    m_grassCompute->SetUniformValue("GrassBaseSideCurve", m_grassBaseSideCurve);
+                }
+                if (ImGui::DragFloat("Grass Blade Side Curve Offset", &m_grassSideCurveOffset, 0.01f, 0.0f, 0.5f))
+                {
+                    m_grassCompute->SetUniformValue("GrassSideCurveOffset", m_grassSideCurveOffset);
+                }
+                if (ImGui::DragFloat("Grass Blade Base Bend", &m_grassBaseBend, 0.01f, 0.0f, 2.0f))
+                {
+                    m_grassCompute->SetUniformValue("GrassBaseBend", m_grassBaseBend);
+                }
+                if (ImGui::DragFloat("Grass Blade Bend Offset", &m_grassBendOffset, 0.01f, 0.0f, 1.0f))
+                {
+                    m_grassCompute->SetUniformValue("GrassBendOffset", m_grassBendOffset);
+                }
+                if (ImGui::DragFloat("Jitter Strength", &m_jitterStrength, 0.1f, 0.0f, 10.0f))
+                {
+                    m_grassCompute->SetUniformValue("JitterStrength", m_jitterStrength);
+                }
+
+                ImGui::Separator();
+                ImGui::Text("Wind Properties (TBD)");
+
+                if (ImGui::DragFloat("WindSpeed", &m_windSpeed, 0.01f, 0.0f, 10.0f))
+                {
+                    m_grassMaterial->SetUniformValue("WindSpeed", m_windSpeed);
+                }
+                if (ImGui::DragFloat2("WindDirection", &m_windDirection[0], 0.01f, -1.0f, 1.0f))
+                {
+                    m_grassMaterial->SetUniformValue("WindDirection", m_windDirection);
+                }
+
+
+                ImGui::Separator();
+
+                ImGui::Text("Grass Color & Light Properties");
+
+                if (ImGui::ColorEdit3("Color", &m_color[0]))
+                {
+                    m_grassMaterial->SetUniformValue("Color", m_color);
+                }
+                if (ImGui::ColorEdit3("Bottom Color", &m_bottomColor[0]))
+                {
+                    m_grassMaterial->SetUniformValue("BottomColor", m_bottomColor);
+                }
+                if (ImGui::ColorEdit3("Top Color", &m_topColor[0]))
+                {
+                    m_grassMaterial->SetUniformValue("TopColor", m_topColor);
+                }
+                if (ImGui::ColorEdit3("Ambient Color", &m_ambientColor[0]))
+                {
+                    m_grassMaterial->SetUniformValue("AmbientColor", m_ambientColor);
+                }
+                if (ImGui::DragFloat("Ambient Reflectance", &m_ambientReflectance, 0.01f, 0.00f, 4.0f))
+                {
+                    m_grassMaterial->SetUniformValue("AmbientReflectance", m_ambientReflectance);
+                }
+                if (ImGui::DragFloat("Diffuse Reflectance", &m_diffuseReflectance, 0.01f, 0.00f, 4.0f))
+                {
+                    m_grassMaterial->SetUniformValue("DiffuseReflectance", m_diffuseReflectance);
+                }
+                if (ImGui::DragFloat("Specular Reflectance", &m_specularReflectance, 0.01f, 0.00f, 4.0f))
+                {
+                    m_grassMaterial->SetUniformValue("SpecularReflectance", m_specularReflectance);
+                }
+                if (ImGui::DragFloat("Specular Exponent", &m_specularExponent, 0.5f, 0.00f, 200.0f))
+                {
+                    m_grassMaterial->SetUniformValue("SpecularExponent", m_specularExponent);
+                }
+
+                ImGui::Separator();
+
+            }
+        }
+
+        m_imGui.EndFrame();
     }
 
 };

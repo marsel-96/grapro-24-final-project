@@ -28,7 +28,14 @@ uniform sampler2D GrassBladeHeightMap;
 uniform sampler2D GrassBladeTypeMap;
 uniform float GrassBladeHeightMin;
 uniform float GrassBladeHeightMax;
+uniform float GrassBladeHeightMultiplier;
 uniform float GrassBladeHeightJitter;
+uniform float GrassBaseBend;
+uniform float GrassBendOffset;
+uniform float GrassBaseWidth;
+uniform float GrassBaseSideCurve;
+uniform float GrassWidthOffset;
+uniform float GrassSideCurveOffset;
 
 uniform float JitterStrength;
 
@@ -52,7 +59,6 @@ float GetGrassBladeHeight(vec2 uv, vec2 hash)
 
 vec3 GetPosition(uvec2 laneId, vec2 hash)
 {
-    // TODO Maybe I can use random jitter based on hash or lane id instead of the hash
     float jitterX = hash.x;
     float jitterZ = hash.y;
 
@@ -75,7 +81,7 @@ uint GetGrassBladeType(vec2 uv, vec2 hash)
         texelPos.x * (1 - texelPos.y)
     );
 
-    // TODO: Index of the grass blade type, now uselsess but I had fun writing it. Please future me do use it for something
+    // TODO: Index of the grass blade type, now useless. Please future me do use it for something
     return uint(
         randomWeighted(texels, weights, hash) * 255
     );
@@ -100,13 +106,13 @@ void main ()
     position.y = GetHeight(uv, hash);
 
     // TODO: Frustum culling, Distance culling, Occlusion culling
-    vec4 worldPositon = WorldMatrix * vec4(position, 1.0);
-    vec4 clipPosition = ViewProjectionMatrix * worldPositon;
-
-    if (FrustumCulling(clipPosition))
-    {
-        return;
-    }
+//    vec4 worldPositon = WorldMatrix * vec4(position, 1.0);
+//    vec4 clipPosition = ViewProjectionMatrix * worldPositon;
+//
+//    if (FrustumCulling(clipPosition))
+//    {
+//        return;
+//    }
 
     float grassBladeHeight = GetGrassBladeHeight(uv, hash);
     grassBladeHeight += hash.x * GrassBladeHeightJitter;
@@ -114,106 +120,27 @@ void main ()
     {
         return;
     }
-
-    grassBladeHeight = grassBladeHeight * GrassBladeHeightMax;
     uint indexGrassBlade = GetGrassBladeType(uv, hash);
 
     GrassBlade blade;
 
     const uint idx = atomicCounterIncrement(bladeIndexAtomic);
 
+    vec2 randomFacing = hash22(id.yx) - 0.5;
+
     blade.position = PlaneCentre + position;
-    blade.height = grassBladeHeight;
+    blade.height = clamp(grassBladeHeight * GrassBladeHeightMultiplier, GrassBladeHeightMin, GrassBladeHeightMax);
     blade.grassType = indexGrassBlade;
     blade.hash = hash12(hash);
-    blade.width = 0.1;
-    blade.tilt = 1.0;
-    blade.bend = 1.0;
-    blade.sideCurve = 1.0;
-    blade.facing = vec2(0.5, 0.5);
+    blade.width = GrassBaseWidth + hash.x * GrassWidthOffset;
+    blade.tilt = blade.height - 0.25; // If equal to height, the blade is vertical
+    blade.bend = GrassBaseBend + hash.y * hash.x * GrassBendOffset; // TODO the more the height the more the bend
+    blade.sideCurve = GrassBaseSideCurve + hash.y * GrassSideCurveOffset; // Middle point curve
+    blade.facing = normalize(randomFacing);
     blade.windForce = 1.0;
     blade.clumpColor = 1.0;
     blade.clumpFacing = vec2(0.5, 0.5);
-
+   
     Blades[idx] = blade;
-
-
-//    //Copy parameters from parameter struct
-//    //float4 clumpColor = bladeParameters.clumpColor;
-//    float baseHeight = bladeParameters.baseHeight;
-//    float heightRandom = bladeParameters.heightRandom;
-//    float baseWidth = bladeParameters.baseWidth;
-//    float widthRandom = bladeParameters.widthRandom;
-//    float baseTilt = bladeParameters.baseTilt;
-//    float tiltRandom = bladeParameters.tiltRandom;
-//    float baseBend = bladeParameters.baseBend;
-//    float bendRandom = bladeParameters.bendRandom;
-//
-//    float2 clumpHash = hashwithoutsine22(clumpCentre);
-//    float2 sharedClumpFacing = normalize( tan((clumpHash+float2(0.13, 1.111))  *2 - 1));
-//    float2 bladeFacing = normalize( hashwithoutsine22(id.xy)  *2 - 1);
-//    float2 combinedFacing = normalize(lerp(bladeFacing, sharedClumpFacing, bladeParameters.pointInSameDirection));
-//    float2 globalWindFacingVec= float2(cos(_GlobalWindFacingAngle), sin(_GlobalWindFacingAngle));
-//    float2 globalFacing = normalize(lerp(combinedFacing, globalWindFacingVec, _GlobalWindFacingContribution));
-//
-//    bladeFacing = globalFacing ;
-//
-//    float angle = atan2(bladeFacing.y,bladeFacing.x);
-//
-//
-//    float2 bigWindUV = worldUV * (_BigWindScale);
-//
-//    bigWindUV += _Time.y * globalWindFacingVec *_BigWindSpeed;
-//
-//    float bigWind = WindTex.SampleLevel(samplerWindTex, bigWindUV, 0).x;
-//    float bigTheta = ((bigWind*2)-1)* 3.14159;
-//    float2 bigWindDir = (float2(cos(bigTheta), sin(bigTheta)));
-//    float2 grassSideVec = normalize(float2(-bladeFacing.y, bladeFacing.x));
-//    float rotateBladeFromBigWindAmount = dot(grassSideVec, bigWindDir);
-//
-//    _BigWindRotateAmount = lerp(0, _BigWindRotateAmount, _WindControl);
-//
-//    float bigWindRotateAngle = rotateBladeFromBigWindAmount * (3.14159/2) * _BigWindRotateAmount;
-//
-//    //float2 smallWindUV = worldUV * (_SmallWindScale);
-//    //smallWindUV += _Time.y * float2(1,0) *_SmallWindSpeed;
-//    //float smallWind = WindTex.SampleLevel(samplerWindTex, smallWindUV, 0).y;
-//    //float smallWindRotateAngle = (smallWind)* 3.14159 * _SmallWindRotateAmount;
-//    //float2 cameraDirXZ = posToCam.xz;
-//    //float cameraAngle = atan2(cameraDirXZ.y,cameraDirXZ.x);
-//
-//
-//    angle += bigWindRotateAngle;
-//    blade.rotAngle = angle;
-//    blade.hash = rand(id.xyx);
-//    blade.height = baseHeight + remap01_neg11(  rand(id.xxy) ) * heightRandom;
-//    blade.width = baseWidth + remap01_neg11(  rand(id.yxx) ) * widthRandom;
-//    //0-1 value, controlling the vertical component of the p3 point in the bezier curve, horizontal can be derived from pythag.
-//    blade.tilt = baseTilt + remap01_neg11(  rand(id.xyx * float3(1.12, 3.3, 17.6)) ) * tiltRandom;
-//    blade.bend = baseBend + remap01_neg11(  rand(id.xyy * float3(12.32, 0.23, 3.39)) ) * bendRandom;
-//
-//    blade.surfaceNorm = norm;
-//    float distanceToCentre = distance(raisedVertex.xz,  clumpCentre);
-//
-//    float atten = 1-smoothstep(_CentreColorSmoothStepLower,_CentreColorSmoothStepUpper , distanceToCentre);
-//    float3 clumpColor =  ClumpGradientMap.SampleLevel(samplerClumpGradientMap, clumpHash.x, 0).xyz;
-//    float3 bladeColor =  ClumpGradientMap.SampleLevel(samplerClumpGradientMap, blade.hash.x, 0).xyz;
-//    float3 finalColor = lerp(clumpColor, bladeColor , _ClumpColorUniformity);
-//
-//    blade.color = finalColor.xyz;
-//
-//    float viewAlignment = abs(dot(bladeFacing, normalize(posToCam.xz)));
-//    float sideBend = smoothstep(0.3, 0, viewAlignment)*1.5;
-//    //float sideBend = viewAlignment < _Test  ? _Test2 : 0;
-//
-//
-//    blade.sideBend = sideBend;
-//
-//    blade.clumpColorDistanceFade = atten;
-//    float windForce = saturate(  ((bigWind - 0.5) * max(_WindTexContrast, 0)) + 0.5f   );
-//    blade.windForce = (windForce);
-//
-//    _GrassBlades.Append(blade);
-
 
 }

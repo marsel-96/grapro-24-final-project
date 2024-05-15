@@ -30,12 +30,12 @@ vec3 ComputeDiffuseLighting(SurfaceData data, vec3 lightDir)
 
 vec3 ComputeSpecularLighting(SurfaceData data, vec3 lightDir, vec3 viewDir)
 {
-   vec3 halfDir = GetHalfVector(lightDir, viewDir);
-   float specularIntensity = ClampedDot(halfDir, data.normal);
+//   vec3 halfDir = GetHalfVector(lightDir, viewDir);
+//   float specularIntensity = ClampedDot(halfDir, data.normal);
    
    // Alternative version: Same result, with different specularExponent values
-   //vec3 reflectDir = reflect(lightDir, data.normal);
-   //float specularIntensity = ClampedDot(reflectDir, viewDir);
+   vec3 reflectDir = reflect(lightDir, data.normal);
+   float specularIntensity = ClampedDot(reflectDir, viewDir);
 
    specularIntensity = pow(specularIntensity, data.specularExponent);
 
